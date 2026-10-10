@@ -1,0 +1,12 @@
+jupyterlab
+ipykernel
+pandas
+numpy
+scipy
+pyarrow
+matplotlib
+scikit-learn
+umap-learn
+implicit
+torch
+tqdm
