@@ -27,11 +27,15 @@ const vertexShader = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     float dist = -mv.z;
     float twinkle = 0.88 + 0.12 * sin(uTime * 1.4 + aPhase);
-    gl_PointSize = clamp(aSize * aBoost * uScale / dist, 2.0, 110.0) * uPixelRatio;
+    gl_PointSize = clamp(aSize * aBoost * uScale / dist, 1.5, 110.0) * uPixelRatio;
     // Far stars fade a little so the near side of the galaxy reads first.
     float fade = clamp(1.25 - dist / 520.0, 0.35, 1.0);
     vColor = color;
-    vAlpha = aBright * twinkle * fade;
+    // Obscure films (small stars) glow faintly so dense regions don't wash out to white.
+    float fame = clamp((aSize - 1.6) / 8.4, 0.0, 1.0);
+    // Selected, hovered and neighbour stars (boosted) always show at full strength.
+    float presence = aBoost > 1.01 ? 1.0 : mix(0.22, 1.0, fame);
+    vAlpha = aBright * twinkle * fade * presence;
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -148,7 +152,7 @@ export class Galaxy {
       this.positions.set(m.p, i * 3);
       color.set(genreColor(catalog.genres[m.pg]));
       colors.set([color.r, color.g, color.b], i * 3);
-      this.sizes[i] = 2.4 + 7.6 * Math.pow(Math.log1p(m.n) / maxLog, 1.6);
+      this.sizes[i] = 1.6 + 8.4 * Math.pow(Math.log1p(m.n) / maxLog, 2.2);
       phases[i] = Math.random() * Math.PI * 2;
     });
     this.geometry.setAttribute("position", new THREE.BufferAttribute(this.positions, 3));

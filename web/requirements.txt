@@ -1,0 +1,4 @@
+# The website only. The ML stack (torch, umap, ...) lives in ../requirements.txt
+# and is needed just to run scripts/export_map.py, never on the server.
+Django==6.1.2
+whitenoise==6.12.0

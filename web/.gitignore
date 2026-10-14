@@ -1,2 +1,8 @@
 node_modules/
-dist/
+# Vite output and collectstatic output are rebuilt on every deploy.
+galaxy/static/galaxy/dist/
+staticfiles/
+db.sqlite3
+.env*
+.vercel/
+__pycache__/

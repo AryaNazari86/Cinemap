@@ -11,7 +11,7 @@ const CARD_SHIFT_PX = 190; // about half the card's width plus its gap from the 
 
 async function boot() {
   const started = performance.now();
-  const catalog = await loadCatalog(`${import.meta.env.BASE_URL}data/movies.json`);
+  const catalog = await loadCatalog(document.body.dataset.moviesUrl!);
 
   let selected = -1;
   const select = (idx: number, fly = true) => {
