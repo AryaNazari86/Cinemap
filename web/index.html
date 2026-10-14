@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#05060b" />
+    <title>Cinemap</title>
+    <meta name="description" content="A galaxy of films, arranged by who loves them. Every star is a movie." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2305060b'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23ffd27a'/%3E%3Ccircle cx='8' cy='11' r='2' fill='%23ff7eb0'/%3E%3Ccircle cx='24' cy='21' r='2' fill='%2342d4f4'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,600;1,500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="labels" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">CINEMAP</div>
+        <div class="tagline">A galaxy of <span id="count">…</span> films, arranged by taste</div>
+      </div>
+
+      <div class="search-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
+        </svg>
+        <input
+          id="search"
+          type="search"
+          autocomplete="off"
+          spellcheck="false"
+          role="combobox"
+          aria-controls="search-results"
+          aria-expanded="false"
+          aria-autocomplete="list"
+          aria-label="Search for a film"
+        />
+        <kbd class="search-kbd" aria-hidden="true">/</kbd>
+        <ul id="search-results" role="listbox" hidden></ul>
+      </div>
+
+      <div class="top-actions">
+        <button id="reset" class="icon-btn" aria-label="Reset view" title="Reset view">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 3v6h6" /></svg>
+        </button>
+        <button id="about-open" class="icon-btn" aria-label="About this map" title="About this map">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7.5v.01" /></svg>
+        </button>
+      </div>
+    </header>
+
+    <section id="card" class="card" role="dialog" hidden></section>
+
+    <aside id="legend" class="legend">
+      <div class="legend-head">
+        <button id="legend-toggle" class="legend-title" aria-label="Toggle genre filter">Genres</button>
+        <button id="legend-clear" class="legend-clear" hidden>Show all</button>
+      </div>
+      <div id="legend-list" class="legend-list"></div>
+    </aside>
+
+    <div class="hint" aria-hidden="true">
+      <span><b>Drag</b> to orbit</span><span><b>Scroll</b> to zoom</span><span><b>Right-drag</b> to pan</span><span><b>Click</b> a star</span>
+    </div>
+
+    <dialog id="about" class="about">
+      <div class="about-inner">
+        <button class="card-close" data-close aria-label="Close">×</button>
+        <div class="card-slate">Now showing</div>
+        <h2>How to read the map</h2>
+        <p>
+          Every star is a film. Films sit close together when the same people rated them the same way, not because
+          someone tagged them with the same genre.
+        </p>
+        <p>
+          The positions come from a matrix factorization model trained on MovieLens ratings. It learns a
+          <span id="about-dims">…</span>-number vector for every film; UMAP squashes those vectors into the three
+          dimensions you can fly through. A few films that are close in the full space look apart here, so the
+          <em>Closest in taste</em> list in each card uses all <span id="about-dims-2">…</span> dimensions.
+        </p>
+        <p>Bigger, brighter stars have more ratings. Colour is each film's most distinctive genre.</p>
+        <p class="about-credit">
+          Data: MovieLens, GroupLens Research. Harper &amp; Konstan, ACM TiiS 2015.
+        </p>
+      </div>
+    </dialog>
+
+    <div id="loader" class="loader" role="status">
+      <div class="leader">
+        <div class="leader-sweep"></div>
+        <div class="leader-cross"></div>
+        <div class="leader-num"><span>3</span><span>2</span><span>1</span></div>
+      </div>
+      <div id="loader-text" class="loader-text">Threading the projector…</div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

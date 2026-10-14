@@ -1,0 +1,20 @@
+{
+  "name": "cinemap-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "export-map": "../.venv/bin/python scripts/export_map.py"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.4"
+  }
+}
