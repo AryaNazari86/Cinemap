@@ -1,4 +1,4 @@
-// Shape of galaxy/static/galaxy/data/movies.json, written by scripts/export_map.py.
+// Shape of galaxy/static/galaxy/data/movies.json, written by ml/scripts/export_map.py.
 export interface RawMovie {
   t: string; // display title
   y: number | null; // year

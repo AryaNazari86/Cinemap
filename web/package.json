@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",
-    "watch": "vite build --watch --mode development",
-    "export-map": "../.venv/bin/python scripts/export_map.py"
+    "watch": "vite build --watch --mode development"
   },
   "dependencies": {
     "three": "^0.186.1"

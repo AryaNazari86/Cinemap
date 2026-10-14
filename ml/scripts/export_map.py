@@ -1,14 +1,17 @@
 """Export trained movie embeddings as the point cloud the website renders.
 
+This is the only hand-off between ml/ and web/: it reads a model from ml/models
+and writes web/galaxy/static/galaxy/data/movies.json.
+
 Reads the movie vectors from a saved MatrixFactorization state dict, squashes
 them to 3D with UMAP for the map layout, and finds each movie's nearest
 neighbours in the full embedding space. Writes one JSON file for the frontend.
 
-    python web/scripts/export_map.py                  # 32M model (default)
-    python web/scripts/export_map.py \
-        --model models/mf_small.pt \
-        --processed data/processed/ml-latest-small \
-        --raw data/raw/ml-latest-small
+    python ml/scripts/export_map.py                   # 32M model (default)
+    python ml/scripts/export_map.py \
+        --model ml/models/mf_small.pt \
+        --processed ml/data/processed/ml-latest-small \
+        --raw ml/data/raw/ml-latest-small
 """
 
 import argparse
@@ -20,7 +23,7 @@ import pandas as pd
 import torch
 import umap
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[2]  # repo root; paths below are relative to it
 
 # Articles MovieLens moves to the end of a title, e.g. "Usual Suspects, The".
 ARTICLES = "The|A|An|Le|La|Les|L'|Il|Lo|I|Gli|El|Los|Las|Un|Une|Una|Der|Die|Das|Den|Det|De|O|Os"
@@ -70,9 +73,9 @@ def nearest_neighbors(vectors, k, chunk=2048):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="models/mf_32m.pt")
-    parser.add_argument("--processed", default="data/processed/ml-32m")
-    parser.add_argument("--raw", default="data/raw/ml-32m")
+    parser.add_argument("--model", default="ml/models/mf_32m.pt")
+    parser.add_argument("--processed", default="ml/data/processed/ml-32m")
+    parser.add_argument("--raw", default="ml/data/raw/ml-32m")
     parser.add_argument("--out", default="web/galaxy/static/galaxy/data/movies.json")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()

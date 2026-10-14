@@ -1,8 +1,8 @@
 # Data and trained models stay local (MovieLens zips are ~240 MB)
-data/raw/
-data/processed/
-models/*
-!models/.gitkeep
+ml/data/raw/
+ml/data/processed/
+ml/models/*
+!ml/models/.gitkeep
 
 .venv/
 __pycache__/
