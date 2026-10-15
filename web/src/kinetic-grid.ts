@@ -28,11 +28,10 @@ const RIPPLE_LIFE_S = 0.85;
 const RIPPLE_WIDTH = 55;
 
 // Light theme: faint graphite at rest, the site's accent blue (#0071e3) near the pointer.
-const ACCENT = "0, 113, 227";
+// Sections can ask for another glow colour with data-grid-accent="r, g, b".
+const DEFAULT_ACCENT = "0, 113, 227";
 const LINE_REST = [0, 0, 0, 0.055] as const;
-const LINE_ACTIVE = [0, 113, 227, 0.55] as const;
 const NODE_REST = [0, 0, 0, 0.13] as const;
-const NODE_ACTIVE = [0, 113, 227, 0.9] as const;
 const NODE_RADIUS = [1.6, 3] as const;
 
 type Rgba = readonly [number, number, number, number];
@@ -55,6 +54,8 @@ export class KineticGrid {
   private influenceTarget = 0;
   private ripples: Ripple[] = [];
   private dirty = true;
+  /** "r, g, b" of the glow, taken from the section under the pointer. */
+  private accent = DEFAULT_ACCENT;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext("2d")!;
@@ -65,6 +66,8 @@ export class KineticGrid {
     window.addEventListener("pointermove", (ev) => {
       if (ev.pointerType !== "mouse") return;
       this.target = { x: ev.clientX, y: ev.clientY };
+      const region = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>("[data-grid-accent]");
+      this.accent = region?.dataset.gridAccent ?? DEFAULT_ACCENT;
       if (this.influenceTarget === 0) this.pointer = { ...this.target }; // don't sweep in from afar
       this.influenceTarget = 1;
       this.dirty = true;
@@ -158,7 +161,10 @@ export class KineticGrid {
   }
 
   private draw(now: number) {
-    const { ctx, width: W, height: H } = this;
+    const { ctx, width: W, height: H, accent } = this;
+    const [ar, ag, ab] = accent.split(",").map(Number);
+    const lineActive: Rgba = [ar, ag, ab, 0.55];
+    const nodeActive: Rgba = [ar, ag, ab, 0.9];
     ctx.clearRect(0, 0, W, H);
     ctx.drawImage(this.dots, 0, 0, W, H);
 
@@ -179,7 +185,7 @@ export class KineticGrid {
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = rgba(LINE_REST, LINE_ACTIVE, t);
+      ctx.strokeStyle = rgba(LINE_REST, lineActive, t);
       ctx.lineWidth = mix(0.8, 1.5, t);
       ctx.stroke();
     };
@@ -197,8 +203,8 @@ export class KineticGrid {
         if (t > 0.3) {
           const halo = r + mix(0, 6, (t - 0.3) / 0.7);
           const glow = ctx.createRadialGradient(p.x, p.y, r * 0.5, p.x, p.y, halo);
-          glow.addColorStop(0, `rgba(${ACCENT},${(t * 0.25).toFixed(3)})`);
-          glow.addColorStop(1, `rgba(${ACCENT},0)`);
+          glow.addColorStop(0, `rgba(${accent},${(t * 0.25).toFixed(3)})`);
+          glow.addColorStop(1, `rgba(${accent},0)`);
           ctx.beginPath();
           ctx.arc(p.x, p.y, halo, 0, Math.PI * 2);
           ctx.fillStyle = glow;
@@ -206,7 +212,7 @@ export class KineticGrid {
         }
         ctx.beginPath();
         ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = rgba(NODE_REST, NODE_ACTIVE, t);
+        ctx.fillStyle = rgba(NODE_REST, nodeActive, t);
         ctx.fill();
       }
     }
@@ -215,7 +221,7 @@ export class KineticGrid {
       const age = (now - r.born) / 1000;
       ctx.beginPath();
       ctx.arc(r.x, r.y, age * RIPPLE_SPEED, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(${ACCENT},${(Math.max(0, 1 - age / RIPPLE_LIFE_S) * 0.25).toFixed(3)})`;
+      ctx.strokeStyle = `rgba(${accent},${(Math.max(0, 1 - age / RIPPLE_LIFE_S) * 0.25).toFixed(3)})`;
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }

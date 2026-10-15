@@ -128,7 +128,6 @@ svg {
   border: 1px solid var(--glass-border);
   background: var(--glass);
   backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
   box-shadow: var(--shadow-float);
 }
 
@@ -343,7 +342,6 @@ svg {
   border-radius: 22px;
   background: var(--glass);
   backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
   box-shadow: var(--shadow-float);
   color: var(--label);
   font-size: 16px;
@@ -455,7 +453,6 @@ svg {
   border-radius: 22px;
   background: var(--glass);
   backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
   box-shadow: var(--shadow-float);
   font-size: 15px;
   font-weight: 500;
@@ -565,7 +562,6 @@ svg {
   border: 1px solid var(--glass-border);
   background: var(--glass);
   backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
   box-shadow: var(--shadow-float);
 }
 
@@ -612,7 +608,6 @@ svg {
   border-radius: 980px;
   background: var(--glass);
   backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
   color: var(--label-2);
   font-size: 13px;
   white-space: nowrap;
@@ -969,7 +964,6 @@ svg {
 .section-white {
   background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(6px) saturate(160%);
-  -webkit-backdrop-filter: blur(6px) saturate(160%);
   border-block: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 -1px 0 rgba(0, 0, 0, 0.04);
 }
@@ -1090,6 +1084,60 @@ svg {
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+/*
+ * Dark glass, IMDb charcoal with IMDb yellow (experiment). Over the light page it lands
+ * near #292929: white text 14.5:1, 70% white 7.9:1, yellow 8.9:1. The tokens are
+ * redefined here so everything inside (titles, tiles, buttons) follows automatically.
+ */
+.section-dark {
+  --label: #ffffff;
+  --label-2: rgba(255, 255, 255, 0.78);
+  --page: #1f1f1f; /* placeholder fill behind posters that haven't loaded */
+  --separator: rgba(255, 255, 255, 0.12);
+  --fill: rgba(255, 255, 255, 0.1);
+  --fill-hover: rgba(255, 255, 255, 0.16);
+  --accent: #f5c518;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: var(--label);
+  /* A soft sheen from the top over smoked glass; the page and grid blur through it. */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 35%),
+    rgba(20, 20, 22, 0.8);
+  backdrop-filter: blur(16px) saturate(170%);
+  border-block: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Warm light caught inside the glass, kept to the corners, away from body text. */
+.section-dark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(38% 55% at 92% 8%, rgba(245, 197, 24, 0.22), transparent 70%),
+    radial-gradient(34% 50% at 4% 100%, rgba(255, 140, 40, 0.14), transparent 70%);
+  pointer-events: none;
+}
+
+/* Frosted cards: a darker pane that blurs the glow behind it, with a bright rim. */
+.section-dark .feature {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.09) 0%, rgba(10, 10, 12, 0.35) 45%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 18px 40px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+.section-dark .tile-poster.loading {
+  background: linear-gradient(100deg, #262626 30%, #333333 50%, #262626 70%) 0 0 / 200% 100%;
+}
+
+.section-dark .tile-poster.has-image {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
 }
 
 /* ---------- Poster tiles (carousel, "Loved by both audiences") ---------- */
@@ -1612,11 +1660,20 @@ svg {
   .section-white .feature {
     background: var(--surface);
     backdrop-filter: none;
-    -webkit-backdrop-filter: none;
   }
 
   .section-white .feature {
     background: var(--page);
+  }
+
+  .section-dark {
+    background: #121212;
+    backdrop-filter: none;
+  }
+
+  .section-dark .feature {
+    background: #1f1f1f;
+    backdrop-filter: none;
   }
 }
 
