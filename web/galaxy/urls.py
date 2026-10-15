@@ -8,4 +8,5 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("api/art/", views.artwork, name="art"),
     path("api/compare/", views.compare, name="compare"),
+    path("api/profile/preview/", views.profile_preview, name="profile-preview"),
 ]

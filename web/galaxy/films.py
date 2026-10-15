@@ -4,6 +4,7 @@ Rows are the map's film indices: the position in movies.json, the same number as
 """
 
 import json
+from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
@@ -11,7 +12,36 @@ import numpy as np
 
 DATA = Path(__file__).resolve().parent / "data"
 FILMS = DATA / "films.npz"
+TITLES = DATA / "titles.json"  # [year, title, *alternate titles] per film
+AXES = DATA / "axes.json"  # hand-edited names for the taste axes
 WIKIPEDIA = DATA / "wikipedia.json"  # written by scripts/link_wikipedia.py
+
+# Reliability tiers in films.npz, from each film's training rating count (thresholds live in the export).
+TIER_MAP = 1  # drawn on the map
+TIER_RECOMMEND = 2  # trusted as a recommendation, a neighbour or a landmark for placing people
+
+
+@dataclass(frozen=True)
+class Model:
+    """The trained model's film side: prediction = global_mean + user bias + bias + user . vectors."""
+
+    version: str
+    global_mean: float
+    vectors: np.ndarray  # (films, dim) raw vectors
+    bias: np.ndarray
+    tier: np.ndarray
+    xyz: np.ndarray  # map positions
+
+
+@dataclass(frozen=True)
+class Axes:
+    """Taste axes: coords = ((unit - mean) @ components.T) / scale, in standard deviations."""
+
+    mean: np.ndarray
+    components: np.ndarray
+    scale: np.ndarray
+    user_quantiles: np.ndarray  # (axes, 101): percentiles of MovieLens raters on each axis
+    names: list[dict]  # name, low, high per axis
 
 
 @cache
@@ -23,6 +53,33 @@ def _data():
 def vectors() -> tuple[np.ndarray, np.ndarray]:
     """(unit vectors, ratings count) per film."""
     return _data()["unit"].astype(np.float32), _data()["n_ratings"]
+
+
+@cache
+def model() -> Model:
+    d = _data()
+    unit, _ = vectors()
+    return Model(
+        version=str(d["model_version"]),
+        global_mean=float(d["global_mean"]),
+        vectors=unit * d["norm"][:, None],
+        bias=d["bias"],
+        tier=d["tier"],
+        xyz=d["xyz"],
+    )
+
+
+@cache
+def axes() -> Axes:
+    d = _data()
+    names = [{k: a[k] for k in ("name", "low", "high")} for a in json.loads(AXES.read_text())["axes"]]
+    return Axes(d["axis_mean"], d["axis_components"], d["axis_scale"], d["axis_user_quantiles"], names)
+
+
+@cache
+def titles() -> list[list]:
+    """[year or None, title, *alternate titles] per film."""
+    return json.loads(TITLES.read_text())["films"]
 
 
 @cache

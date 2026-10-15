@@ -337,6 +337,8 @@ def main():
         model_version=np.str_(model_version),
         n_ratings=movies["n_ratings"].to_numpy(np.int32),
         tier=tier,
+        # Map positions, as in movies.json, for placing a new person among the films.
+        xyz=xyz.astype(np.float32),
         # -1 where MovieLens has no link; IMDb ids without the "tt" prefix.
         tmdb=movies["tmdbId"].fillna(-1).to_numpy(np.int64),
         imdb=movies["imdbId"].astype("Float64").fillna(-1).to_numpy(np.int64),

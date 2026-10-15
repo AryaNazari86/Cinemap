@@ -1,13 +1,17 @@
 from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
-from django.views.decorators.http import require_GET
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_GET, require_POST
 
-from . import art, films, similarity
+from . import art, films, letterboxd, matching, similarity, taste
 
 MAX_FILMS = 24
+UNMATCHED_SHOWN = 200
 
 
+# The cookie lets the page's scripts send the CSRF token with uploads.
+@ensure_csrf_cookie
 def index(request):
     return render(request, "galaxy/index.html", {"art_source": art.source()})
 
@@ -43,4 +47,44 @@ def compare(request):
     # Fixed for a given model export; a new export ships with a new deploy.
     if not settings.DEBUG:
         response["Cache-Control"] = "public, max-age=3600, s-maxage=86400"
+    return response
+
+
+@require_POST
+def profile_preview(request):
+    """Taste profile from an uploaded Letterboxd export (.zip) or ratings.csv, in the form field "file".
+
+    Nothing is stored. The response includes the matched ratings so a later save can send them back.
+    """
+    upload = request.FILES.get("file")
+    if upload is None:
+        return JsonResponse({"error": "Upload your Letterboxd export as the file field."}, status=400)
+    if upload.size > letterboxd.MAX_UPLOAD_BYTES:
+        return JsonResponse({"error": "That file is too large. Upload ratings.csv on its own."}, status=413)
+    try:
+        ratings = letterboxd.read_upload(upload.name or "", upload.read())
+    except letterboxd.LetterboxdError as err:
+        return JsonResponse({"error": str(err)}, status=400)
+
+    matches = matching.match_ratings(ratings.rows)
+    match_summary = {
+        "rows": len(ratings.rows),
+        "skipped": ratings.skipped,
+        "matched": len(matches.matched),
+        "rate": round(matches.rate, 4),
+        "unmatched": [{"name": n, "year": y} for n, y in matches.unmatched[:UNMATCHED_SHOWN]],
+    }
+    try:
+        result = taste.profile(matches.matched)
+    except taste.TooFewRatings as err:
+        response = JsonResponse({"error": str(err), "match": match_summary}, status=422)
+    else:
+        del result["person"]
+        result["match"] = match_summary
+        result["ratings"] = [
+            [m.film, m.rating, m.date.isoformat() if m.date else None] for m in matches.matched
+        ]
+        response = JsonResponse(result)
+    # Someone's ratings: never cached anywhere.
+    response["Cache-Control"] = "no-store"
     return response
