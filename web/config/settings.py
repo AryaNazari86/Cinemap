@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 import os
 from pathlib import Path
 
+import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -40,6 +41,13 @@ CUSTOM_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").sp
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", ".vercel.app", *CUSTOM_HOSTS]
 CSRF_TRUSTED_ORIGINS = ["https://*.vercel.app", *(f"https://{h}" for h in CUSTOM_HOSTS)]
 
+if ON_VERCEL:
+    # Vercel terminates HTTPS; trust its header so redirects and OAuth callbacks use https.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 
 # Application definition
 
@@ -50,6 +58,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
     "galaxy",
 ]
 
@@ -62,6 +74,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -87,10 +100,54 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+# DATABASE_URL (hosted Postgres, e.g. Neon) when set; a local SQLite file otherwise.
+# Serverless functions don't live long enough to reuse connections, so each request opens
+# its own; Neon's pooled URL (host ending -pooler) makes that cheap. Its transaction-mode
+# pooler can't hold server-side cursors open between transactions, so those are off.
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+if not DATABASE_URL and ON_VERCEL:
+    raise ImproperlyConfigured("Set DATABASE_URL in the Vercel project's environment variables (Neon's pooled URL).")
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+    "default": dj_database_url.parse(DATABASE_URL, conn_max_age=0, conn_health_checks=True)
+    if DATABASE_URL
+    else {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}
+}
+if DATABASE_URL:
+    DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# Sign-in: Google only, through django-allauth, and optional everywhere. There are no
+# passwords; an account is created on the first Google sign-in.
+# https://docs.allauth.org/en/latest/socialaccount/providers/google.html
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",  # the admin
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
+SOCIALACCOUNT_ONLY = True
+ACCOUNT_LOGIN_METHODS = {"email"}
+ACCOUNT_SIGNUP_FIELDS = ["email*"]
+ACCOUNT_EMAIL_VERIFICATION = "none"  # Google has verified it
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+ACCOUNT_LOGOUT_ON_GET = False
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "http" if DEBUG and not ON_VERCEL else "https"
+SOCIALACCOUNT_AUTO_SIGNUP = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_STORE_TOKENS = False
+LOGIN_REDIRECT_URL = "/#taste"
+ACCOUNT_LOGOUT_REDIRECT_URL = "/"
+# From Google Cloud Console > APIs & Services > Credentials (an OAuth client of type "Web application").
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APPS": [
+            {
+                "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+                "secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+            }
+        ],
+        "SCOPE": ["email"],  # the least Google offers; no name, photo or contacts
+        "AUTH_PARAMS": {"prompt": "select_account"},
+        "OAUTH_PKCE_ENABLED": True,
     }
 }
 
@@ -132,6 +189,9 @@ USE_TZ = True
 # TMDB artwork (posters, backdrops). Either credential works; the read token is preferred.
 TMDB_READ_TOKEN = os.environ.get("TMDB_READ_TOKEN", "")
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
+
+# Uploads (Letterboxd exports) stay in memory and are never written to disk; letterboxd.py caps them lower.
+FILE_UPLOAD_MAX_MEMORY_SIZE = 4_500_000
 
 STATIC_URL = "static/"
 # collectstatic gathers everything here; on Vercel it runs automatically and the CDN serves it.

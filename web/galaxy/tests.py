@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import zipfile
 from datetime import date
 from pathlib import Path
@@ -7,10 +8,12 @@ from unittest import mock
 
 import numpy as np
 from django.core.cache import cache
+from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase, override_settings
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 
 from . import art, films, letterboxd, matching, taste
+from .models import ProfileRating, ProfileUnmatchedFilm, TasteProfile, UnmatchedFilm
 from .letterboxd import LetterboxdError, Rating
 from .matching import Match
 
@@ -391,3 +394,133 @@ class ProfilePreviewApiTests(SimpleTestCase):
         self.assertEqual(self.client.post("/api/profile/preview/", HTTP_HOST="localhost").status_code, 400)
         self.assertEqual(self.client.get("/api/profile/preview/", HTTP_HOST="localhost").status_code, 405)
         self.assertEqual(self.post(b"Title,Stars\nx,1\n").status_code, 400)
+
+
+CRIME_FAN = [
+    ("The Godfather", 1972, 5), ("Goodfellas", 1990, 4.5), ("Taxi Driver", 1976, 4), ("Heat", 1995, 4.5),
+    ("Fargo", 1996, 4), ("Mamma Mia!", 2008, 1), ("Twilight", 2008, 0.5), ("Made Up Film", 2020, 3),
+    ("made up film!", 2020, 2),  # the same missing film twice counts once in the tally
+]
+
+
+class SavedProfileApiTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("someone", email="someone@example.com")
+        self.client.force_login(self.user)
+
+    def preview(self, rows=CRIME_FAN):
+        content = ratings_csv([["2024-01-01", n, y, "https://boxd.it/abc", r] for n, y, r in rows])
+        res = self.client.post("/api/profile/preview/", {"file": SimpleUploadedFile("ratings.csv", content)})
+        self.assertEqual(res.status_code, 200)
+        return res.json()
+
+    def save(self, preview, consent=False, client=None):
+        body = {"ratings": preview["ratings"], "unmatched": preview["match"]["unmatched"], "consent": consent}
+        return (client or self.client).post("/api/profile/", body, content_type="application/json")
+
+    def test_save_then_fetch(self):
+        preview = self.preview()
+        res = self.save(preview)
+        self.assertEqual(res.status_code, 201)
+        fetched = self.client.get("/api/profile/").json()["profile"]
+        self.assertEqual(res["Cache-Control"], "no-store")
+        self.assertFalse(fetched["stale"])
+        self.assertFalse(fetched["saved"]["research_consent"])  # off unless asked for
+        for key in ("recommendations", "axes", "position", "near", "ratings"):
+            self.assertEqual(fetched[key], preview[key], key)
+        self.assertEqual(fetched["match"]["matched"], 7)
+        self.assertEqual(ProfileRating.objects.count(), 7)
+        self.assertEqual(ProfileUnmatchedFilm.objects.count(), 2)
+        profile = TasteProfile.objects.get()
+        self.assertEqual(len(profile.vector), films.model().vectors.shape[1])
+        self.assertEqual(profile.model_version, films.model().version)
+
+    def test_never_stores_letterboxd_links(self):
+        self.save(self.preview())
+        stored = json.dumps([list(m.objects.values()) for m in (TasteProfile, ProfileRating, ProfileUnmatchedFilm)], default=str)
+        self.assertNotIn("boxd.it", stored)
+
+    def test_new_upload_replaces_the_profile(self):
+        self.save(self.preview())
+        self.save(self.preview(CRIME_FAN[:6]), consent=True)
+        profile = TasteProfile.objects.get()
+        self.assertEqual(profile.ratings.count(), 6)
+        self.assertEqual(profile.unmatched.count(), 0)
+        self.assertTrue(profile.research_consent)
+        self.assertIsNotNone(profile.research_consent_at)
+
+    def test_unmatched_tally_follows_profiles(self):
+        other = Client()
+        other.force_login(get_user_model().objects.create_user("other", email="other@example.com"))
+        self.save(self.preview())
+        self.save(self.preview(), client=other)
+        tally = lambda: list(UnmatchedFilm.objects.values_list("title", "year", "profile_count"))
+        self.assertEqual(tally(), [("made up film", 2020, 2)])
+        self.save(self.preview(CRIME_FAN[:7]))  # replaced without it
+        self.assertEqual(tally(), [("made up film", 2020, 1)])
+        other.delete("/api/profile/")
+        self.assertEqual(tally(), [])
+
+    def test_delete(self):
+        self.save(self.preview())
+        self.assertEqual(self.client.delete("/api/profile/").json(), {"deleted": True})
+        self.assertFalse(TasteProfile.objects.exists())
+        self.assertFalse(ProfileRating.objects.exists() or ProfileUnmatchedFilm.objects.exists())
+        self.assertEqual(self.client.delete("/api/profile/").json(), {"deleted": False})
+        self.assertEqual(self.client.get("/api/profile/").json(), {"profile": None})
+        self.assertTrue(get_user_model().objects.filter(pk=self.user.pk).exists())  # the account stays
+
+    def test_consent(self):
+        patch = lambda body: self.client.patch("/api/profile/", body, content_type="application/json")
+        self.assertEqual(patch({"consent": True}).status_code, 404)
+        self.save(self.preview())
+        self.assertEqual(patch({"consent": True}).json(), {"research_consent": True})
+        self.assertIsNotNone(TasteProfile.objects.get().research_consent_at)
+        self.assertEqual(patch({"consent": "yes"}).status_code, 400)
+        patch({"consent": False})
+        self.assertIsNone(TasteProfile.objects.get().research_consent_at)
+
+    def test_profile_from_an_older_model_asks_for_a_new_upload(self):
+        self.save(self.preview())
+        TasteProfile.objects.update(model_version="mf_old-00000000")
+        fetched = self.client.get("/api/profile/").json()["profile"]
+        self.assertTrue(fetched["stale"])
+        self.assertNotIn("recommendations", fetched)
+
+    def test_rejects_bad_saves(self):
+        good = self.preview()
+        cases = {
+            "not json": "{",
+            "no ratings": {"unmatched": []},
+            "film off the map": {"ratings": [[films.count(), 4, None]]},
+            "film as bool": {"ratings": [[True, 4, None]]},
+            "bad stars": {"ratings": [[0, 4.2, None]]},
+            "bad date": {"ratings": [[0, 4, "yesterday"]]},
+            "bad unmatched": {"ratings": good["ratings"], "unmatched": [{"name": "", "year": 2020}]},
+            "consent not bool": {"ratings": good["ratings"], "consent": "yes"},
+            "too many": {"ratings": good["ratings"], "unmatched": [{"name": "x", "year": None}] * letterboxd.MAX_ROWS},
+        }
+        for label, body in cases.items():
+            with self.subTest(label):
+                payload = body if isinstance(body, str) else json.dumps(body)
+                res = self.client.post("/api/profile/", payload, content_type="application/json")
+                self.assertEqual(res.status_code, 400)
+        res = self.client.post("/api/profile/", {"ratings": good["ratings"][:3]}, content_type="application/json")
+        self.assertEqual(res.status_code, 422)
+        self.assertFalse(TasteProfile.objects.exists())
+
+    def test_requires_sign_in_and_csrf(self):
+        anonymous = Client()
+        for method in ("get", "post", "patch", "delete"):
+            res = getattr(anonymous, method)("/api/profile/")
+            self.assertEqual(res.status_code, 401)
+            self.assertEqual(res.json()["login_url"], "/accounts/google/login/")
+        strict = Client(enforce_csrf_checks=True)
+        strict.force_login(self.user)
+        self.assertEqual(self.save(self.preview(), client=strict).status_code, 403)
+        self.assertEqual(strict.delete("/api/profile/").status_code, 403)
+        # The page hands out the token the frontend sends back.
+        page = strict.get("/")
+        token = page.cookies["csrftoken"].value
+        res = strict.delete("/api/profile/", headers={"X-CSRFToken": token})
+        self.assertEqual(res.status_code, 200)

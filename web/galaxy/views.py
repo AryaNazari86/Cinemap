@@ -1,13 +1,15 @@
+import json
+
 from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.urls import reverse
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from . import art, films, letterboxd, matching, similarity, taste
+from . import art, films, letterboxd, matching, profiles, similarity, taste
 
 MAX_FILMS = 24
-UNMATCHED_SHOWN = 200
 
 
 # The cookie lets the page's scripts send the CSRF token with uploads.
@@ -50,41 +52,74 @@ def compare(request):
     return response
 
 
+def private(response: JsonResponse) -> JsonResponse:
+    """Someone's ratings: never cached anywhere."""
+    response["Cache-Control"] = "no-store"
+    return response
+
+
 @require_POST
 def profile_preview(request):
     """Taste profile from an uploaded Letterboxd export (.zip) or ratings.csv, in the form field "file".
 
-    Nothing is stored. The response includes the matched ratings so a later save can send them back.
+    Nothing is stored. The response includes the matched and unmatched ratings, which
+    POST /api/profile/ takes to save it.
     """
     upload = request.FILES.get("file")
     if upload is None:
-        return JsonResponse({"error": "Upload your Letterboxd export as the file field."}, status=400)
+        return private(JsonResponse({"error": "Upload your Letterboxd export as the file field."}, status=400))
     if upload.size > letterboxd.MAX_UPLOAD_BYTES:
-        return JsonResponse({"error": "That file is too large. Upload ratings.csv on its own."}, status=413)
+        return private(JsonResponse({"error": "That file is too large. Upload ratings.csv on its own."}, status=413))
     try:
         ratings = letterboxd.read_upload(upload.name or "", upload.read())
     except letterboxd.LetterboxdError as err:
-        return JsonResponse({"error": str(err)}, status=400)
-
+        return private(JsonResponse({"error": str(err)}, status=400))
     matches = matching.match_ratings(ratings.rows)
-    match_summary = {
-        "rows": len(ratings.rows),
-        "skipped": ratings.skipped,
-        "matched": len(matches.matched),
-        "rate": round(matches.rate, 4),
-        "unmatched": [{"name": n, "year": y} for n, y in matches.unmatched[:UNMATCHED_SHOWN]],
-    }
     try:
-        result = taste.profile(matches.matched)
+        result = profiles.describe(matches.matched, matches.unmatched, len(ratings.rows), ratings.skipped)
     except taste.TooFewRatings as err:
-        response = JsonResponse({"error": str(err), "match": match_summary}, status=422)
-    else:
-        del result["person"]
-        result["match"] = match_summary
-        result["ratings"] = [
-            [m.film, m.rating, m.date.isoformat() if m.date else None] for m in matches.matched
-        ]
-        response = JsonResponse(result)
-    # Someone's ratings: never cached anywhere.
-    response["Cache-Control"] = "no-store"
-    return response
+        return private(JsonResponse({"error": str(err), "match": err.match}, status=422))
+    return private(JsonResponse(result))
+
+
+@require_http_methods(["GET", "POST", "PATCH", "DELETE"])
+def profile(request):
+    """The signed-in person's saved profile.
+
+    GET     the saved profile, as preview shows it ({"profile": null} if none)
+    POST    save a preview: {"ratings": [...], "unmatched": [...], "consent": bool}, replacing any earlier one
+    PATCH   {"consent": bool}
+    DELETE  the profile and every rating in it
+    """
+    if not request.user.is_authenticated:
+        return private(JsonResponse(
+            {"error": "Sign in with Google to save your map.", "login_url": reverse("google_login")}, status=401
+        ))
+    if request.method == "GET":
+        saved = profiles.load(request.user)
+        return private(JsonResponse({"profile": profiles.describe_saved(saved) if saved else None}))
+    if request.method == "DELETE":
+        deleted = profiles.delete(request.user)
+        return private(JsonResponse({"deleted": deleted}))
+
+    try:
+        data = json.loads(request.body)
+    except (ValueError, UnicodeDecodeError):
+        return private(JsonResponse({"error": "Send JSON."}, status=400))
+    if request.method == "PATCH":
+        saved = profiles.load(request.user)
+        if saved is None:
+            return private(JsonResponse({"error": "There is no saved profile."}, status=404))
+        if not isinstance(data, dict) or not isinstance(data.get("consent"), bool):
+            return private(JsonResponse({"error": "Send consent as true or false."}, status=400))
+        profiles.set_consent(saved, data["consent"])
+        return private(JsonResponse({"research_consent": saved.research_consent}))
+
+    try:
+        matched, unmatched, n_rows, consent = profiles.parse_save_request(data)
+        saved = profiles.save(request.user, matched, unmatched, n_rows, consent)
+    except profiles.InvalidProfile as err:
+        return private(JsonResponse({"error": str(err)}, status=400))
+    except taste.TooFewRatings as err:
+        return private(JsonResponse({"error": str(err)}, status=422))
+    return private(JsonResponse({"profile": profiles.describe_saved(saved)}, status=201))
