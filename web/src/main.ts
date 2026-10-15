@@ -5,6 +5,7 @@ import { Carousel } from "./carousel";
 import { Compare, tile } from "./compare";
 import { type Catalog, genreColor, loadCatalog } from "./data";
 import { Galaxy } from "./galaxy";
+import { KineticGrid } from "./kinetic-grid";
 import { Labels, type Rect } from "./labels";
 import { Search } from "./search";
 
@@ -294,6 +295,9 @@ function buildCarousel(catalog: Catalog, onPick: (idx: number) => void) {
   track.append(copy(), clone);
   new Carousel(track, $<HTMLButtonElement>("#carousel-toggle"));
 }
+
+// The background needs no film data, so it starts while the map loads.
+new KineticGrid($<HTMLCanvasElement>("#grid-bg"));
 
 boot().catch((err) => {
   console.error(err);
