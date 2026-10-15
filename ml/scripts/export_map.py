@@ -161,6 +161,8 @@ def main():
             "model": args.model,
             "dataset": Path(args.processed).name,
             "n_movies": n_movies,
+            "n_users": int(state["user_vectors.weight"].shape[0]),
+            "n_ratings": int(movies["n_ratings"].sum()),
             "dim": dim,
         },
         "genres": genres,

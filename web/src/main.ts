@@ -254,9 +254,24 @@ function buildGenrePicker(
 }
 
 function fillNumbers(catalog: Catalog) {
-  const films = catalog.movies.length.toLocaleString();
+  const n = catalog.movies.length;
+  const films = n.toLocaleString();
+  const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 0 });
+  const ratings = catalog.meta.n_ratings ?? catalog.movies.reduce((sum, m) => sum + m.n, 0);
+  const stats: Record<string, string | null> = {
+    films,
+    pairs: compact.format((n * (n - 1)) / 2),
+    genres: String(catalog.genres.length),
+    dims: String(catalog.meta.dim),
+    ratings: compact.format(ratings),
+    users: catalog.meta.n_users ? compact.format(catalog.meta.n_users) : null,
+  };
+  for (const el of document.querySelectorAll<HTMLElement>("[data-stat]")) {
+    const value = stats[el.dataset.stat!];
+    if (value) el.textContent = value;
+    else el.parentElement?.remove(); // e.g. an older export without the user count
+  }
   $("#hero-films").textContent = films;
-  $("#how-dims").textContent = String(catalog.meta.dim);
   $<HTMLInputElement>("#search").placeholder = `Search ${films} films`;
 }
 

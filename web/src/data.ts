@@ -14,7 +14,14 @@ export interface RawMovie {
 }
 
 export interface MapData {
-  meta: { model: string; dataset: string; n_movies: number; dim: number };
+  meta: {
+    model: string;
+    dataset: string;
+    n_movies: number;
+    n_users?: number; // people behind the ratings; missing in older exports
+    n_ratings?: number; // training ratings
+    dim: number;
+  };
   genres: string[];
   movies: RawMovie[];
 }

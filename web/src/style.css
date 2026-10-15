@@ -1008,29 +1008,65 @@ svg {
   padding: 0 var(--gutter);
 }
 
+/* Feature tiles: name, one big number, a short caption. */
 .feature {
-  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 28px 30px;
   border-radius: 28px;
   background: var(--surface);
 }
 
-.feature svg {
-  width: 30px;
-  height: 30px;
+.feature h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.feature h3 svg {
+  width: 20px;
+  height: 20px;
   color: var(--accent);
 }
 
-.feature h3 {
-  margin: 16px 0 6px;
-  font-size: 21px;
+.feature .feature-number {
+  margin: 28px 0 0;
+  color: var(--label);
+  font-size: clamp(44px, 4.6vw, 64px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+.feature .feature-unit {
+  margin: 6px 0 0;
+  color: var(--label);
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.015em;
 }
 
 .feature p {
-  margin: 0;
+  margin: 14px 0 0;
   color: var(--label-2);
-  font-size: 17px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+/* The model tile spans two columns and lines up three figures. */
+.feature-wide {
+  grid-column: span 2;
+}
+
+.feature-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
 }
 
 /* Feature cards sit on white sections, so they take the page grey. */
@@ -1379,7 +1415,7 @@ svg {
 
 @media (max-width: 900px) {
   .features {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   /* Two posters side by side, the score below them. */
@@ -1400,6 +1436,18 @@ svg {
 @media (max-width: 700px) {
   :root {
     --gutter: 16px;
+  }
+
+  .features {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .feature-wide {
+    grid-column: auto;
+  }
+
+  .feature-figures .feature-number {
+    font-size: 36px;
   }
 
   .localnav {
