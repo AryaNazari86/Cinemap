@@ -32,27 +32,28 @@ export interface Catalog {
   byPopularity: number[];
 }
 
+// Darker, saturated hues so every genre dot keeps at least 3:1 contrast on the light map (#f3f3f3).
 const GENRE_COLORS: Record<string, string> = {
-  Drama: "#f0a64a",
-  Comedy: "#ffd966",
-  Action: "#ff6b3d",
-  Thriller: "#7b86ff",
-  Adventure: "#5fd39a",
-  "Sci-Fi": "#42d4f4",
-  Romance: "#ff7eb0",
-  Crime: "#e04f5f",
-  Fantasy: "#c79bff",
-  Children: "#b4e36b",
-  Mystery: "#5aa8ff",
-  Animation: "#ffa37a",
-  Horror: "#b14bff",
-  War: "#c2b98a",
-  Musical: "#ffb8d9",
-  Western: "#d79a5f",
-  "Film-Noir": "#c8d0dc",
-  Documentary: "#7fe3cf",
+  Drama: "#c25e00",
+  Comedy: "#9c7a00",
+  Action: "#d9480f",
+  Thriller: "#4c5ad6",
+  Adventure: "#2b8a3e",
+  "Sci-Fi": "#0b7ba3",
+  Romance: "#d6336c",
+  Crime: "#b02a37",
+  Fantasy: "#8e44ad",
+  Children: "#5c8a0d",
+  Mystery: "#1971c2",
+  Animation: "#e8590c",
+  Horror: "#6f2dbd",
+  War: "#7a7046",
+  Musical: "#c2255c",
+  Western: "#9c5b27",
+  "Film-Noir": "#495057",
+  Documentary: "#0b8a74",
 };
-const FALLBACK_COLOR = "#d9d4c7";
+const FALLBACK_COLOR = "#6b6b6b";
 
 export function genreColor(name: string | undefined): string {
   return (name && GENRE_COLORS[name]) || FALLBACK_COLOR;

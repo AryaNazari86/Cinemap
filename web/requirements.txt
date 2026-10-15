@@ -2,3 +2,5 @@
 # and never reaches the server.
 Django==6.1.2
 whitenoise==6.12.0
+numpy==2.5.3
+certifi==2026.7.22

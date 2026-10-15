@@ -129,6 +129,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
+# TMDB artwork (posters, backdrops). Either credential works; the read token is preferred.
+TMDB_READ_TOKEN = os.environ.get("TMDB_READ_TOKEN", "")
+TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
+
 STATIC_URL = "static/"
 # collectstatic gathers everything here; on Vercel it runs automatically and the CDN serves it.
 STATIC_ROOT = BASE_DIR / "staticfiles"

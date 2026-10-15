@@ -4,5 +4,6 @@ galaxy/static/galaxy/dist/
 staticfiles/
 db.sqlite3
 .env*
+!.env.example
 .vercel/
 __pycache__/

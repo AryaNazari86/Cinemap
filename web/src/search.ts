@@ -11,12 +11,14 @@ export class Search {
     private readonly list: HTMLUListElement,
     private readonly catalog: Catalog,
     private readonly onChoose: (idx: number) => void,
+    /** Only one search on the page should answer the "/" shortcut. */
+    { shortcut = true }: { shortcut?: boolean } = {},
   ) {
-    input.placeholder = `Search ${catalog.movies.length.toLocaleString()} films…`;
     input.addEventListener("input", () => this.run());
     input.addEventListener("focus", () => this.run());
     input.addEventListener("blur", () => setTimeout(() => this.close(), 120));
     input.addEventListener("keydown", (ev) => this.onKey(ev));
+    if (!shortcut) return;
     window.addEventListener("keydown", (ev) => {
       const typing = ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement;
       if (ev.key === "/" && !typing) {
@@ -58,25 +60,27 @@ export class Search {
     if (!this.results.length) {
       const li = document.createElement("li");
       li.className = "search-empty";
-      li.textContent = "No film by that name on this map.";
+      li.textContent = "No films match. Try part of the title, like “godfather”.";
       this.list.append(li);
     }
     this.results.forEach((idx, k) => {
       const m = this.catalog.movies[idx];
       const li = document.createElement("li");
-      li.id = `search-opt-${k}`;
+      li.id = `${this.list.id}-opt-${k}`;
       li.setAttribute("role", "option");
       li.setAttribute("aria-selected", String(k === this.active));
       li.className = "search-result";
+      const genre = this.catalog.genres[m.pg];
       const dot = document.createElement("span");
-      dot.className = "genre-dot";
-      dot.style.setProperty("--c", genreColor(this.catalog.genres[m.pg]));
+      dot.className = "swatch";
+      dot.setAttribute("aria-hidden", "true");
+      dot.style.setProperty("--c", genreColor(genre));
       const title = document.createElement("span");
       title.className = "search-title";
       title.textContent = m.t;
       const year = document.createElement("span");
-      year.className = "search-year";
-      year.textContent = m.y ? String(m.y) : "";
+      year.className = "search-meta";
+      year.textContent = [m.y, genre].filter(Boolean).join(" · ");
       li.append(dot, title, year);
       li.addEventListener("mousedown", (ev) => {
         ev.preventDefault();
@@ -86,7 +90,7 @@ export class Search {
     });
     this.list.hidden = false;
     this.input.setAttribute("aria-expanded", "true");
-    this.input.setAttribute("aria-activedescendant", this.active >= 0 ? `search-opt-${this.active}` : "");
+    this.input.setAttribute("aria-activedescendant", this.active >= 0 ? `${this.list.id}-opt-${this.active}` : "");
   }
 
   private onKey(ev: KeyboardEvent) {

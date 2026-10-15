@@ -3,7 +3,7 @@
   "buildCommand": "npm ci && npm run build",
   "functions": {
     "config/wsgi.py": {
-      "excludeFiles": "{node_modules/**,src/**}"
+      "excludeFiles": "{node_modules/**,src/**,scripts/**}"
     }
   }
 }

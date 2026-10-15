@@ -3,14 +3,14 @@ import type { Galaxy } from "./galaxy";
 
 const MAX_LABELS = 28;
 const CANDIDATES = 700;
-const CHAR_WIDTH = 6.6;
+const CHAR_WIDTH = 6.9;
 const LABEL_HEIGHT = 18;
 const GAP = 6;
 
-type Rect = [number, number, number, number];
+export type Rect = [number, number, number, number];
 
 /**
- * Floating titles over the brightest nearby stars. Priority goes to the hovered
+ * Floating titles beside the most prominent nearby dots. Priority goes to the hovered
  * movie, then the selected movie's neighbours, then the most rated movies;
  * a label is skipped if it would overlap one already placed.
  */
@@ -19,8 +19,10 @@ export class Labels {
   private readonly shown = new Map<number, HTMLDivElement>();
   hovered = -1;
   selected = -1;
-  /** Screen area labels must stay out of (the open movie card). */
-  avoid: Rect | null = null;
+  /** Films whose titles always show, e.g. the two being compared. */
+  pinned: number[] = [];
+  /** Screen areas labels must stay out of: the open film card, the toolbar, the controls. */
+  avoid: Rect[] = [];
 
   constructor(
     private readonly layer: HTMLElement,
@@ -31,12 +33,12 @@ export class Labels {
   update() {
     const g = this.galaxy;
     const movies = this.catalog.movies;
-    const placed: Rect[] = this.avoid ? [this.avoid] : [];
+    const placed: Rect[] = [...this.avoid];
     const next = new Map<number, { x: number; y: number; kind: string; alpha: number }>();
 
     const tryPlace = (i: number, kind: string, force = false) => {
       if (next.has(i) || i === this.selected || !g.onScreen[i] || g.isFiltered(i)) return;
-      const offset = Math.max(6, g.pointSizePx(i) * 0.18) + 4;
+      const offset = g.pointSizePx(i) / 2 + 6;
       const x = g.screenX[i] + offset;
       const y = g.screenY[i] - LABEL_HEIGHT / 2;
       const w = movies[i].t.length * CHAR_WIDTH + 16;
@@ -48,6 +50,7 @@ export class Labels {
     };
 
     if (this.hovered >= 0) tryPlace(this.hovered, "hover", true);
+    for (const i of this.pinned) tryPlace(i, "neighbor", true);
     if (this.selected >= 0) {
       for (const j of movies[this.selected].nb.slice(0, 8)) tryPlace(j, "neighbor");
     }

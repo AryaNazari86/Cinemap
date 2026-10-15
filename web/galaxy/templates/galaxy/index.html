@@ -3,103 +3,181 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#05060b" />
-    <title>Cinemap</title>
-    <meta name="description" content="A galaxy of films, arranged by who loves them. Every star is a movie." />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2305060b'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23ffd27a'/%3E%3Ccircle cx='8' cy='11' r='2' fill='%23ff7eb0'/%3E%3Ccircle cx='24' cy='21' r='2' fill='%2342d4f4'/%3E%3C/svg%3E" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,600;1,500&display=swap"
-      rel="stylesheet"
-    />
+    <meta name="theme-color" content="#f5f5f7" />
+    <meta name="color-scheme" content="light" />
+    <title>Cinemap — Every film, mapped by taste</title>
+    <meta name="description" content="23,350 films placed by how 200,000 people rated them. Find one you love, then see what sits beside it." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d1d1f'/%3E%3Ccircle cx='11' cy='12' r='3' fill='%23fff'/%3E%3Ccircle cx='21' cy='10' r='2' fill='%23fff'/%3E%3Ccircle cx='18' cy='21' r='4' fill='%230071e3'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="{% static 'galaxy/dist/app.css' %}" />
   </head>
-  <body data-movies-url="{% static 'galaxy/data/movies.json' %}">
-    <div id="stage"></div>
-    <div id="labels" aria-hidden="true"></div>
-    <div class="vignette" aria-hidden="true"></div>
-    <div class="grain" aria-hidden="true"></div>
+  <body
+    data-movies-url="{% static 'galaxy/data/movies.json' %}"
+    data-art-url="{% url 'galaxy:art' %}"
+    data-compare-url="{% url 'galaxy:compare' %}"
+  >
+    <a class="skip-link" href="#map">Skip to the map</a>
 
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">CINEMAP</div>
-        <div class="tagline">A galaxy of <span id="count">…</span> films, arranged by taste</div>
+    <nav class="localnav" aria-label="Cinemap">
+      <a class="localnav-title" href="#top">Cinemap</a>
+      <div class="localnav-actions">
+        <a class="pill pill-outline" href="#compare">Compare</a>
+        <a class="pill pill-outline" href="#how">How it works</a>
+        <a class="pill pill-filled" href="#map" data-focus-search>Find a film</a>
       </div>
+    </nav>
 
-      <div class="search-wrap">
-        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
-        </svg>
-        <input
-          id="search"
-          type="search"
-          autocomplete="off"
-          spellcheck="false"
-          role="combobox"
-          aria-controls="search-results"
-          aria-expanded="false"
-          aria-autocomplete="list"
-          aria-label="Search for a film"
-        />
-        <kbd class="search-kbd" aria-hidden="true">/</kbd>
-        <ul id="search-results" role="listbox" hidden></ul>
-      </div>
+    <main id="top">
+      <header class="hero">
+        <p class="eyebrow">Cinemap</p>
+        <h1 class="hero-title">Every film.<br />Mapped by taste.</h1>
+        <p class="hero-sub">
+          <span id="hero-films">23,350</span> films, placed by how people actually rated them. Find one you love, then
+          see what sits beside it.
+        </p>
+      </header>
 
-      <div class="top-actions">
-        <button id="reset" class="icon-btn" aria-label="Reset view" title="Reset view">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 3v6h6" /></svg>
-        </button>
-        <button id="about-open" class="icon-btn" aria-label="About this map" title="About this map">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7.5v.01" /></svg>
-        </button>
-      </div>
-    </header>
+      <section id="map" class="map-section" aria-label="Film map">
+        <div id="map-frame" class="map-frame">
+          <div id="stage" class="stage"></div>
+          <div id="labels" class="labels" aria-hidden="true"></div>
 
-    <section id="card" class="card" role="dialog" hidden></section>
+          <div class="map-toolbar">
+            <div class="search" role="search">
+              <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
+              </svg>
+              <input
+                id="search"
+                type="search"
+                autocomplete="off"
+                spellcheck="false"
+                role="combobox"
+                aria-controls="search-results"
+                aria-expanded="false"
+                aria-autocomplete="list"
+                aria-label="Search films"
+              />
+              <kbd class="search-kbd" aria-hidden="true">/</kbd>
+              <ul id="search-results" role="listbox" aria-label="Matching films" hidden></ul>
+            </div>
 
-    <aside id="legend" class="legend">
-      <div class="legend-head">
-        <button id="legend-toggle" class="legend-title" aria-label="Toggle genre filter">Genres</button>
-        <button id="legend-clear" class="legend-clear" hidden>Show all</button>
-      </div>
-      <div id="legend-list" class="legend-list"></div>
-    </aside>
+            <div class="genre-picker">
+              <button id="genre-button" class="glass-button" aria-expanded="false" aria-controls="genre-panel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+                <span id="genre-button-label">Genres</span>
+              </button>
+              <div id="genre-panel" class="genre-panel" role="group" aria-label="Show only these genres" hidden>
+                <div class="genre-panel-head">
+                  <span class="genre-panel-title">Show genres</span>
+                  <button id="genre-clear" class="text-button" hidden>Clear</button>
+                </div>
+                <ul id="genre-list" class="genre-list"></ul>
+                <p class="genre-panel-note">Colour shows each film's most distinctive genre.</p>
+              </div>
+            </div>
+          </div>
 
-    <div class="hint" aria-hidden="true">
-      <span><b>Drag</b> to orbit</span><span><b>Scroll</b> to zoom</span><span><b>Right-drag</b> to pan</span><span><b>Click</b> a star</span>
-    </div>
+          <section id="card" class="card" role="dialog" aria-modal="false" hidden></section>
 
-    <dialog id="about" class="about">
-      <div class="about-inner">
-        <button class="card-close" data-close aria-label="Close">×</button>
-        <div class="card-slate">Now showing</div>
-        <h2>How to read the map</h2>
+          <div class="map-controls" role="group" aria-label="Map controls">
+            <button id="zoom-in" class="map-button" aria-label="Zoom in" title="Zoom in">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            </button>
+            <button id="zoom-out" class="map-button" aria-label="Zoom out" title="Zoom out">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /></svg>
+            </button>
+            <button id="reset" class="map-button" aria-label="Reset view" title="Reset view">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7" /><path d="M4 4v4.5h4.5" /></svg>
+            </button>
+            <button id="expand" class="map-button" aria-label="Expand map" aria-pressed="false" title="Expand map">
+              <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" /></svg>
+              <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7" /></svg>
+            </button>
+          </div>
+
+          <p id="map-hint" class="map-hint" aria-live="polite">Drag to rotate · Pinch or ⌘-scroll to zoom</p>
+
+          <div id="loader" class="loader" role="status">
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="loader-text">Loading films…</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-white carousel-section" aria-labelledby="classics-title">
+        <div class="section-inner section-head">
+          <h2 id="classics-title" class="section-title section-title-left">Start with a favourite.</h2>
+          <button id="carousel-toggle" class="round-button" aria-pressed="false" aria-label="Pause the carousel">
+            <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12" /></svg>
+            <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
+          </button>
+        </div>
+        <div id="classics" class="classics" aria-label="Popular films"></div>
+      </section>
+
+      <section id="compare" class="section" aria-labelledby="compare-title">
+        <div class="section-inner section-narrow">
+          <p class="eyebrow">Compare</p>
+          <h2 id="compare-title" class="section-title">How alike are two films?</h2>
+          <p class="lede">Pick any two. The score compares <strong>who loves them</strong>, not what they're about.</p>
+        </div>
+        <div class="compare">
+          <div class="compare-film" data-slot="a"></div>
+          <div class="compare-result" id="compare-result" aria-live="polite"></div>
+          <div class="compare-film" data-slot="b"></div>
+        </div>
+        <div class="compare-between" id="compare-between" hidden>
+          <h3 class="compare-between-title">Loved by both audiences</h3>
+          <ul class="tiles" id="compare-between-list"></ul>
+        </div>
+      </section>
+
+      <section id="how" class="section section-white" aria-labelledby="how-title">
+        <div class="section-inner section-narrow">
+          <p class="eyebrow">How it works</p>
+          <h2 id="how-title" class="section-title">Close means alike.</h2>
+          <p class="lede">
+            Every dot is a film. Two films sit close together when <strong>the same people rated them the same way</strong>,
+            not because they share a genre, a director or a decade. Pick any film to see <strong>the eight it's most
+            like</strong>, each with a match score.
+          </p>
+          <p class="lede">
+            The model learns <span id="how-dims">128</span> numbers for every film. To draw the map, those numbers are
+            squashed into three dimensions, so a few alike films land apart. <strong>The More like this list uses all of
+            them</strong>, so trust it over what looks close.
+          </p>
+        </div>
+        <div class="features">
+          <article class="feature">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
+            <h3>Search any film</h3>
+            <p>Type a title and the map flies straight to it. Press / to start typing from anywhere.</p>
+          </article>
+          <article class="feature">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="6" r="2.5" /><circle cx="17" cy="17" r="2" /><path d="M8 16.5 16 7.5M8.5 18H15" /></svg>
+            <h3>Follow the lines</h3>
+            <p>Lines join the film you picked to its closest matches. Click one to keep exploring.</p>
+          </article>
+          <article class="feature">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+            <h3>Narrow it down</h3>
+            <p>Show only the genres you're in the mood for. Everything else fades back.</p>
+          </article>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      <div class="section-inner">
         <p>
-          Every star is a film. Films sit close together when the same people rated them the same way, not because
-          someone tagged them with the same genre.
-        </p>
-        <p>
-          The positions come from a matrix factorization model trained on MovieLens ratings. It learns a
-          <span id="about-dims">…</span>-number vector for every film; UMAP squashes those vectors into the three
-          dimensions you can fly through. A few films that are close in the full space look apart here, so the
-          <em>Closest in taste</em> list in each card uses all <span id="about-dims-2">…</span> dimensions.
-        </p>
-        <p>Bigger, brighter stars have more ratings. Colour is each film's most distinctive genre.</p>
-        <p class="about-credit">
-          Data: MovieLens, GroupLens Research. Harper &amp; Konstan, ACM TiiS 2015.
+          Ratings: MovieLens, GroupLens Research (Harper &amp; Konstan, ACM TiiS 2015), used for non-commercial research.
+          Film links go to IMDb and TMDB; Cinemap isn't affiliated with either.
+          {% if art_source == "tmdb" %}Posters and images come from TMDB. This product uses the TMDB API but is not
+          endorsed or certified by TMDB.{% else %}Posters come from Wikipedia, where they're used under fair use.{% endif %}
         </p>
       </div>
-    </dialog>
-
-    <div id="loader" class="loader" role="status">
-      <div class="leader">
-        <div class="leader-sweep"></div>
-        <div class="leader-cross"></div>
-        <div class="leader-num"><span>3</span><span>2</span><span>1</span></div>
-      </div>
-      <div id="loader-text" class="loader-text">Threading the projector…</div>
-    </div>
+    </footer>
 
     <script type="module" src="{% static 'galaxy/dist/app.js' %}"></script>
   </body>

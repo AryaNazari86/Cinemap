@@ -1,7 +1,9 @@
 """Export trained movie embeddings as the point cloud the website renders.
 
 This is the only hand-off between ml/ and web/: it reads a model from ml/models
-and writes web/galaxy/static/galaxy/data/movies.json.
+and writes web/galaxy/static/galaxy/data/movies.json (the map the browser draws)
+plus web/galaxy/data/films.npz (full vectors and ids Django uses to compare films and
+find their posters).
 
 Reads the movie vectors from a saved MatrixFactorization state dict, squashes
 them to 3D with UMAP for the map layout, and finds each movie's nearest
@@ -77,6 +79,7 @@ def main():
     parser.add_argument("--processed", default="ml/data/processed/ml-32m")
     parser.add_argument("--raw", default="ml/data/raw/ml-32m")
     parser.add_argument("--out", default="web/galaxy/static/galaxy/data/movies.json")
+    parser.add_argument("--films-out", default="web/galaxy/data/films.npz")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -165,6 +168,21 @@ def main():
     }
     out.write_text(json.dumps(payload, separators=(",", ":"), ensure_ascii=False))
     print(f"wrote {out.relative_to(ROOT)} ({out.stat().st_size / 1e6:.1f} MB)")
+
+    # Unit vectors, so a dot product is the cosine similarity the site reports as "match".
+    # float16 halves the file and changes similarities by well under 0.1 percentage points.
+    unit = vectors / np.linalg.norm(vectors, axis=1, keepdims=True).clip(min=1e-8)
+    films_out = ROOT / args.films_out
+    films_out.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        films_out,
+        unit=unit.astype(np.float16),
+        n_ratings=movies["n_ratings"].to_numpy(np.int32),
+        # -1 where MovieLens has no link; IMDb ids without the "tt" prefix.
+        tmdb=movies["tmdbId"].fillna(-1).to_numpy(np.int64),
+        imdb=movies["imdbId"].astype("Float64").fillna(-1).to_numpy(np.int64),
+    )
+    print(f"wrote {films_out.relative_to(ROOT)} ({films_out.stat().st_size / 1e6:.1f} MB)")
 
 
 if __name__ == "__main__":
