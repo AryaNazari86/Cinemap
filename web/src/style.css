@@ -1502,6 +1502,19 @@ svg {
   margin: 0;
 }
 
+.footer .footer-source {
+  margin-top: 8px;
+}
+
+.footer a {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+.footer a:hover {
+  text-decoration: none;
+}
+
 /* ---------- "See your taste" floating button ---------- */
 
 .fab {
