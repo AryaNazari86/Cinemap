@@ -1477,6 +1477,556 @@ svg {
   margin: 0;
 }
 
+/* ---------- Taste axes on the map ---------- */
+
+.glass-button.busy {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.axes-panel {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 6;
+  width: min(400px, calc(100% - 32px));
+  padding: 14px 16px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  background: var(--glass);
+  backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: var(--shadow-float);
+}
+
+.axes-panel[hidden] {
+  display: none;
+}
+
+.axes-panel-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.axes-row {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.axes-row label {
+  color: var(--label-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.axes-row select {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--label);
+  font: 14px var(--font);
+}
+
+.axes-panel-note {
+  margin: 4px 0 0;
+  color: var(--label-2);
+  font-size: 12px;
+}
+
+/* The axes pack films tighter than the map, so labels need a backing to stay readable. */
+.axes-mode .star-label:not(.tag-you) {
+  background: rgba(255, 255, 255, 0.86);
+  text-shadow: none;
+}
+
+.star-label.tag-axis {
+  color: var(--label-2);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+
+.star-label.tag-you {
+  background: var(--label);
+  color: #fff;
+  font-weight: 600;
+  text-shadow: none;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+}
+
+/* ---------- Your taste ---------- */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.taste-body {
+  max-width: 1028px;
+  margin: 48px auto 0;
+  padding: 0 var(--gutter);
+}
+
+.upload {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.upload[hidden] {
+  display: none;
+}
+
+.upload-steps {
+  margin: 0 0 24px;
+  padding-left: 22px;
+  color: var(--label-2);
+  font-size: 17px;
+}
+
+.upload-steps li + li {
+  margin-top: 8px;
+}
+
+.upload-steps strong {
+  color: var(--label);
+}
+
+.upload-steps a {
+  color: var(--link);
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 40px 24px;
+  border: 2px dashed rgba(0, 0, 0, 0.18);
+  border-radius: 28px;
+  background: var(--surface);
+  text-align: center;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.dropzone.over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.dropzone.busy {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.dropzone-icon {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+
+.dropzone-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.dropzone-sub {
+  margin: 0 0 16px;
+  color: var(--label-2);
+  font-size: 15px;
+}
+
+.dropzone-button {
+  cursor: pointer;
+}
+
+.dropzone-button:focus-within {
+  outline: 3px solid rgba(0, 113, 227, 0.6);
+  outline-offset: 2px;
+}
+
+.upload-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 640px;
+  min-height: 24px;
+  margin: 16px auto 0;
+  color: var(--label-2);
+  font-size: 15px;
+  text-align: center;
+}
+
+.upload-status[data-state="error"] {
+  color: #b42318;
+}
+
+.upload-status[data-state="done"] {
+  color: var(--label);
+  font-weight: 500;
+}
+
+.upload-progress {
+  flex-basis: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) calc(var(--p) * 100%), var(--fill-hover) 0);
+}
+
+/* Once results show, their header says the same thing; the status stays for screen readers. */
+.taste-body:has(.taste-result:not([hidden])) .upload-status[data-state="done"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.upload-status[data-state="done"] .upload-progress,
+.upload-status[data-state="error"] .upload-progress {
+  display: none;
+}
+
+.upload-status + .text-button {
+  display: block;
+  margin: 8px auto 0;
+}
+
+.taste-result[hidden] {
+  display: none;
+}
+
+.taste-head {
+  text-align: center;
+}
+
+.taste-stat {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+
+.taste-confidence {
+  margin: 6px 0 0;
+  color: var(--label-2);
+  font-size: 15px;
+}
+
+.taste-confidence.confidence-low {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 980px;
+  background: #fff4d6;
+  color: #7a4d00;
+}
+
+.taste-actions,
+.save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.taste-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 20px;
+  margin-top: 40px;
+}
+
+.panel {
+  padding: 24px 24px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+.panel-title {
+  margin: 0 0 14px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.panel-note {
+  margin: 12px 0 0;
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+.lean-list,
+.near-list,
+.unmatched-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lean + .lean {
+  margin-top: 18px;
+}
+
+.lean-name {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--label-2);
+}
+
+.lean-track {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--fill-hover);
+}
+
+.lean-mid {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.lean-dot {
+  position: absolute;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--label);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
+}
+
+.lean-ends {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  color: var(--label-2);
+  font-size: 13px;
+}
+
+.lean-ends .strong {
+  color: var(--label);
+  font-weight: 600;
+}
+
+.lean-text {
+  margin: 2px 0 0;
+  font-size: 15px;
+}
+
+.lean-more {
+  margin-top: 18px;
+}
+
+.lean-more summary,
+.unmatched summary {
+  color: var(--link);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.lean-more .lean-list {
+  margin-top: 16px;
+}
+
+.near-list {
+  margin: 0 -10px;
+}
+
+.near-list .similar-row {
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+}
+
+.taste-subtitle {
+  margin: 56px 0 24px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.recs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 28px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rec {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  transition: transform 0.25s ease;
+}
+
+.rec:hover {
+  transform: translateY(-4px);
+}
+
+.rec .tile-fallback {
+  font-size: 15px;
+}
+
+.rec-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.rec-because {
+  margin-top: 6px;
+  color: var(--label-2);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.recs-more {
+  display: flex;
+  margin: 32px auto 0;
+}
+
+.unmatched {
+  max-width: 788px;
+  margin: 48px auto 0;
+}
+
+.unmatched-list {
+  columns: 2;
+  column-gap: 24px;
+  margin-top: 12px;
+  color: var(--label-2);
+  font-size: 14px;
+}
+
+.unmatched-list li {
+  break-inside: avoid;
+  padding: 2px 0;
+}
+
+.save {
+  max-width: 640px;
+  margin: 48px auto 0;
+  text-align: center;
+}
+
+.consent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 16px;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.consent input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.save-status {
+  min-height: 20px;
+  margin: 10px 0 0;
+  color: var(--label-2);
+  font-size: 14px;
+}
+
+.pill.danger {
+  border-color: rgba(180, 35, 24, 0.4);
+  color: #b42318;
+}
+
+.pill.danger:hover {
+  border-color: #b42318;
+}
+
+/* Buttons styled as pills in this section, without the browser's button chrome. */
+.taste button.pill-outline {
+  background: none;
+}
+
+.taste button.pill-filled {
+  border: none;
+}
+
+.taste button.pill:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 900px) {
+  .taste-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .axes-panel {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+  }
+
+  /* The film sheet docks at the bottom too; it wins. */
+  .map-frame:has(.card:not([hidden])) .axes-panel {
+    display: none;
+  }
+
+  .recs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 14px;
+  }
+
+  .unmatched-list {
+    columns: 1;
+  }
+
+  .taste-stat {
+    font-size: 21px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rec,
+  .rec:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
 /* ---------- Tablets ---------- */
 
 @media (max-width: 900px) {

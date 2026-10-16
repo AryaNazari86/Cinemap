@@ -7,6 +7,8 @@ const FOCUS_DISTANCE = 42;
 const NEIGHBOR_LINES = 8;
 const CLICK_SLOP_PX = 5;
 const ACCENT = "#0071e3";
+const MORPH_MS = 1200;
+const GUIDE_COLOR = "#8e8e93";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -55,6 +57,53 @@ const fragmentShader = /* glsl */ `
   }
 `;
 
+// Rings around chosen films (the ones a person rated): a hairline circle just outside each
+// dot, sized like the dot itself so it follows zoom and the dot's state.
+const ringVertexShader = /* glsl */ `
+  uniform float uScale;
+  uniform float uPixelRatio;
+  attribute float aSize;
+  attribute float aBoost;
+  attribute float aBright;
+  varying float vAlpha;
+  varying float vPx;
+
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    float px = clamp(aSize * aBoost * uScale / -mv.z, 2.0, 20.0) + 8.0;
+    gl_PointSize = px * uPixelRatio;
+    vPx = px * uPixelRatio;
+    vAlpha = aBright;
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const ringFragmentShader = /* glsl */ `
+  uniform vec3 uColor;
+  varying float vAlpha;
+  varying float vPx;
+
+  void main() {
+    float d = length(gl_PointCoord - 0.5) * 2.0;
+    float aa = 2.0 / max(vPx, 1.0);
+    float band = 3.0 / max(vPx, 1.0);
+    float ring = smoothstep(1.0 - band - aa, 1.0 - band, d) * (1.0 - smoothstep(1.0 - aa, 1.0, d));
+    if (ring <= 0.0 || vAlpha <= 0.0) discard;
+    gl_FragColor = vec4(uColor, ring * 0.75 * vAlpha);
+  }
+`;
+
+const YOU_SIZE = 0.085; // of the view's height
+const HALO_PERIOD_MS = 2200;
+
+/** Films gliding from one layout to another. */
+interface Morph {
+  from: Float32Array;
+  to: Float32Array;
+  start: number;
+  duration: number;
+}
+
 interface Flight {
   fromCam: THREE.Vector3;
   toCam: THREE.Vector3;
@@ -95,6 +144,14 @@ export class Galaxy {
   private readonly lines: THREE.LineSegments;
   private readonly ring: THREE.Sprite;
   private readonly ring2: THREE.Sprite;
+  /** "You": the person whose taste is shown, a dark dot no genre uses. */
+  private readonly you: THREE.Sprite;
+  /** A soft glow that pulses out from "you" so the dot is easy to spot. */
+  private readonly halo: THREE.Sprite;
+  /** Rings around the films a person rated; draws only the indexed films. */
+  private readonly ratedGeometry = new THREE.BufferGeometry();
+  private readonly rated: THREE.Points;
+  private readonly guides: THREE.LineSegments;
   private readonly viewProj = new THREE.Matrix4();
 
   private selected = -1;
@@ -102,6 +159,7 @@ export class Galaxy {
   private pair: [number, number] | null = null;
   private hovered = -1;
   private genreFilter: Set<number> | null = null;
+  private morph: Morph | null = null;
   private flight: Flight | null = null;
   private pointerDown: { x: number; y: number } | null = null;
   private pointer: { x: number; y: number } | null = null;
@@ -205,6 +263,64 @@ export class Galaxy {
     this.ring.scale.setScalar(0.07);
     this.ring2.scale.setScalar(0.07);
 
+    this.you = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: makeYouTexture(),
+        sizeAttenuation: false,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
+    this.you.scale.setScalar(YOU_SIZE);
+    this.you.renderOrder = 3;
+    this.you.visible = false;
+    this.scene.add(this.you);
+    this.halo = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: makeHaloTexture(),
+        sizeAttenuation: false,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
+    this.halo.renderOrder = 2;
+    this.halo.visible = false;
+    this.scene.add(this.halo);
+
+    // Shares the dots' attributes, so the rings move, hide and grow with their films.
+    for (const name of ["position", "aSize", "aBoost", "aBright"]) {
+      this.ratedGeometry.setAttribute(name, this.geometry.getAttribute(name));
+    }
+    this.rated = new THREE.Points(
+      this.ratedGeometry,
+      new THREE.ShaderMaterial({
+        vertexShader: ringVertexShader,
+        fragmentShader: ringFragmentShader,
+        uniforms: {
+          uScale: this.material.uniforms.uScale,
+          uPixelRatio: this.material.uniforms.uPixelRatio,
+          uColor: { value: new THREE.Color("#1d1d1f") },
+        },
+        transparent: true,
+        depthWrite: false,
+      }),
+    );
+    this.rated.frustumCulled = false;
+    this.rated.visible = false;
+    this.scene.add(this.rated);
+
+    // Three axes through the origin, shown in the Dimensions layout.
+    const guideGeometry = new THREE.BufferGeometry();
+    guideGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(18), 3));
+    this.guides = new THREE.LineSegments(
+      guideGeometry,
+      new THREE.LineBasicMaterial({ color: GUIDE_COLOR, transparent: true, opacity: 0.5, depthWrite: false }),
+    );
+    this.guides.visible = false;
+    this.scene.add(this.guides);
+
     this.bindPointer();
     this.bindWheel();
     this.setExpanded(false);
@@ -226,22 +342,14 @@ export class Galaxy {
     this.pair = null;
     this.ring2.visible = false;
     this.restyle();
-    const lineAttr = this.lines.geometry.getAttribute("position") as THREE.BufferAttribute;
     if (idx < 0) {
       this.lines.visible = false;
       this.ring.visible = false;
       return;
     }
-    const movie = this.catalog.movies[idx];
-    movie.nb.slice(0, NEIGHBOR_LINES).forEach((j, k) => {
-      lineAttr.setXYZ(k * 2, ...movie.p);
-      lineAttr.setXYZ(k * 2 + 1, ...this.catalog.movies[j].p);
-    });
-    lineAttr.needsUpdate = true;
-    this.lines.geometry.setDrawRange(0, Math.min(NEIGHBOR_LINES, movie.nb.length) * 2);
     this.lines.visible = true;
-    this.ring.position.set(...movie.p);
     this.ring.visible = true;
+    this.placeMarks();
     if (fly) this.flyTo(idx);
   }
 
@@ -250,17 +358,11 @@ export class Galaxy {
     this.selected = -1;
     this.pair = [a, b];
     this.restyle();
-    const pa = new THREE.Vector3(...this.catalog.movies[a].p);
-    const pb = new THREE.Vector3(...this.catalog.movies[b].p);
-    const lineAttr = this.lines.geometry.getAttribute("position") as THREE.BufferAttribute;
-    lineAttr.setXYZ(0, pa.x, pa.y, pa.z);
-    lineAttr.setXYZ(1, pb.x, pb.y, pb.z);
-    lineAttr.needsUpdate = true;
-    this.lines.geometry.setDrawRange(0, 2);
     this.lines.visible = true;
-    this.ring.position.copy(pa);
-    this.ring2.position.copy(pb);
     this.ring.visible = this.ring2.visible = true;
+    this.placeMarks();
+    const pa = this.pos(a);
+    const pb = this.pos(b);
 
     const mid = pa.clone().add(pb).multiplyScalar(0.5);
     const distance = THREE.MathUtils.clamp(pa.distanceTo(pb) * 1.4, FOCUS_DISTANCE, 320);
@@ -281,17 +383,75 @@ export class Galaxy {
     this.restyle();
   }
 
+  /** Hidden from the map: too rarely rated to place, or outside the genre filter. */
   isFiltered(idx: number): boolean {
-    return this.genreFilter !== null && !this.catalog.movies[idx].g.some((g) => this.genreFilter!.has(g));
+    const movie = this.catalog.movies[idx];
+    return !movie.shown || (this.genreFilter !== null && !movie.g.some((g) => this.genreFilter!.has(g)));
   }
 
-  flyTo(idx: number) {
+  /** Ring these films, e.g. the ones a person rated, leaving the map otherwise as it is; null clears. */
+  setRated(films: Iterable<number> | null) {
+    const idx = films ? [...films] : [];
+    this.ratedGeometry.setIndex(idx);
+    this.rated.visible = idx.length > 0;
+  }
+
+  /** Show "you" at this point, or hide it with null. */
+  setPerson(position: THREE.Vector3 | null) {
+    this.you.visible = this.halo.visible = position !== null;
+    if (position) {
+      this.you.position.copy(position);
+      this.halo.position.copy(position);
+    }
+  }
+
+  get personPosition(): THREE.Vector3 | null {
+    return this.you.visible ? this.you.position : null;
+  }
+
+  /** Glide every film to a new layout (x, y, z per film), e.g. the taste axes. */
+  setLayout(next: Float32Array) {
+    this.morph = { from: this.positions.slice(), to: next, start: performance.now(), duration: reducedMotion ? 1 : MORPH_MS };
+    // Head for where the selection will be, not where it is; with none, take in the whole new layout.
+    if (this.selected >= 0) this.flyTo(this.selected, next);
+    else this.resetView();
+  }
+
+  /** Axis lines from -length to +length along x, y and z; null hides them. */
+  setGuides(length: number | null) {
+    this.guides.visible = length !== null;
+    if (length === null) return;
+    const attr = this.guides.geometry.getAttribute("position") as THREE.BufferAttribute;
+    for (let axis = 0; axis < 3; axis++) {
+      const end = [0, 0, 0];
+      end[axis] = length;
+      attr.setXYZ(axis * 2, -end[0], -end[1], -end[2]);
+      attr.setXYZ(axis * 2 + 1, end[0], end[1], end[2]);
+    }
+    attr.needsUpdate = true;
+  }
+
+  /** A 3D point in screen px within the map, or null when it's behind the camera. */
+  toScreen(point: THREE.Vector3): { x: number; y: number } | null {
+    const v = point.clone().project(this.camera);
+    if (v.z > 1) return null;
+    return { x: (v.x + 1) * (this.width / 2), y: (1 - v.y) * (this.height / 2) };
+  }
+
+  /** Fly to a point that isn't a film, such as "you". */
+  flyToPoint(point: THREE.Vector3, distance = FOCUS_DISTANCE * 1.6) {
+    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    const travel = this.controls.target.distanceTo(point);
+    this.flyCamera(point.clone().addScaledVector(dir, distance), point.clone(), 900 + Math.min(travel, 250) * 4, travel * 0.35);
+  }
+
+  flyTo(idx: number, layout = this.positions) {
     const movie = this.catalog.movies[idx];
-    const target = new THREE.Vector3(...movie.p);
+    const target = this.pos(idx, layout);
     // Back off far enough that most of the neighbour constellation is in frame.
     const spread = movie.nb
       .slice(0, NEIGHBOR_LINES)
-      .map((j) => target.distanceTo(new THREE.Vector3(...this.catalog.movies[j].p)))
+      .map((j) => target.distanceTo(this.pos(j, layout)))
       .sort((a, b) => a - b);
     const reach = spread[Math.floor(spread.length * 0.75)] ?? 0;
     const distance = THREE.MathUtils.clamp(reach * 1.7, FOCUS_DISTANCE, 110);
@@ -331,11 +491,40 @@ export class Galaxy {
     return Math.min(Math.max(px, 2), 20);
   }
 
+  /** A film's position in a layout (the current one by default). */
+  private pos(i: number, layout = this.positions): THREE.Vector3 {
+    return new THREE.Vector3(layout[i * 3], layout[i * 3 + 1], layout[i * 3 + 2]);
+  }
+
+  /** Put the neighbour lines and rings on their films; rerun while films move. */
+  private placeMarks() {
+    const lineAttr = this.lines.geometry.getAttribute("position") as THREE.BufferAttribute;
+    if (this.pair) {
+      const [pa, pb] = this.pair.map((i) => this.pos(i));
+      lineAttr.setXYZ(0, pa.x, pa.y, pa.z);
+      lineAttr.setXYZ(1, pb.x, pb.y, pb.z);
+      this.lines.geometry.setDrawRange(0, 2);
+      this.ring.position.copy(pa);
+      this.ring2.position.copy(pb);
+    } else if (this.selected >= 0) {
+      const from = this.pos(this.selected);
+      const nb = this.catalog.movies[this.selected].nb.slice(0, NEIGHBOR_LINES);
+      nb.forEach((j, k) => {
+        const to = this.pos(j);
+        lineAttr.setXYZ(k * 2, from.x, from.y, from.z);
+        lineAttr.setXYZ(k * 2 + 1, to.x, to.y, to.z);
+      });
+      this.lines.geometry.setDrawRange(0, nb.length * 2);
+      this.ring.position.copy(from);
+    }
+    lineAttr.needsUpdate = true;
+  }
+
   private restyle() {
     const movies = this.catalog.movies;
     const neighbors = new Set(this.selected >= 0 ? movies[this.selected].nb.slice(0, NEIGHBOR_LINES) : []);
     for (let i = 0; i < movies.length; i++) {
-      let bright = this.isFiltered(i) ? 0.07 : 1;
+      let bright = !movies[i].shown ? 0 : this.isFiltered(i) ? 0.07 : 1;
       let boost = 1;
       if (this.pair) {
         if (this.pair.includes(i)) [bright, boost] = [1, 2.2];
@@ -380,6 +569,24 @@ export class Galaxy {
         this.camera.position.addScaledVector(away, Math.sin(Math.PI * e) * f.arc);
       }
       if (p >= 1) this.flight = null;
+    }
+
+    if (this.morph) {
+      const m = this.morph;
+      const p = Math.min((now - m.start) / m.duration, 1);
+      const e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+      for (let i = 0; i < this.positions.length; i++) this.positions[i] = m.from[i] + (m.to[i] - m.from[i]) * e;
+      this.geometry.getAttribute("position").needsUpdate = true;
+      this.geometry.computeBoundingSphere();
+      this.placeMarks();
+      if (p >= 1) this.morph = null;
+    }
+
+    if (this.halo.visible) {
+      // Breathe outward and fade; held at a soft steady glow for reduced motion.
+      const t = reducedMotion ? 0.35 : (now % HALO_PERIOD_MS) / HALO_PERIOD_MS;
+      this.halo.scale.setScalar(YOU_SIZE * (1.2 + t * 1.3));
+      this.halo.material.opacity = reducedMotion ? 0.5 : 0.65 * (1 - t);
     }
 
     if (!this.viewShift.equals(this.viewShiftGoal)) {
@@ -541,6 +748,46 @@ function makeRingTexture(): THREE.Texture {
   ctx.beginPath();
   ctx.arc(c, c, c * 0.7, 0, Math.PI * 2);
   ctx.stroke();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** "You": a near-black dot ringed in white, so it reads over any genre colour. */
+function makeYouTexture(): THREE.Texture {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const c = size / 2;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(c, c, c * 0.92, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#1d1d1f";
+  ctx.beginPath();
+  ctx.arc(c, c, c * 0.72, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = ACCENT;
+  ctx.beginPath();
+  ctx.arc(c, c, c * 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function makeHaloTexture(): THREE.Texture {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const c = size / 2;
+  const glow = ctx.createRadialGradient(c, c, c * 0.35, c, c, c);
+  glow.addColorStop(0, "rgba(0, 113, 227, 0.55)");
+  glow.addColorStop(1, "rgba(0, 113, 227, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, size, size);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;

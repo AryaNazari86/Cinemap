@@ -15,7 +15,8 @@ MAX_FILMS = 24
 # The cookie lets the page's scripts send the CSRF token with uploads.
 @ensure_csrf_cookie
 def index(request):
-    return render(request, "galaxy/index.html", {"art_source": art.source()})
+    context = {"art_source": art.source(), "axes": films.axis_names(), "sign_in": settings.GOOGLE_SIGN_IN}
+    return render(request, "galaxy/index.html", context)
 
 
 @require_GET
@@ -92,6 +93,8 @@ def profile(request):
     DELETE  the profile and every rating in it
     """
     if not request.user.is_authenticated:
+        if not settings.GOOGLE_SIGN_IN:
+            return private(JsonResponse({"error": "Saving isn't available yet.", "login_url": None}, status=401))
         return private(JsonResponse(
             {"error": "Sign in with Google to save your map.", "login_url": reverse("google_login")}, status=401
         ))

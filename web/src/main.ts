@@ -3,11 +3,14 @@ import { artFor } from "./art";
 import { COMPACT_QUERY, Card } from "./card";
 import { Carousel } from "./carousel";
 import { Compare, tile } from "./compare";
+import type { TasteAxis } from "./api";
 import { type Catalog, genreColor, loadCatalog } from "./data";
+import { type AxisName, Layouts } from "./dimensions";
 import { Galaxy } from "./galaxy";
 import { KineticGrid } from "./kinetic-grid";
 import { Labels, type Rect } from "./labels";
 import { Search } from "./search";
+import { TasteView } from "./taste";
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 const CARD_SHIFT_PX = 190; // about half the popover's width plus its gap from the dot
@@ -21,6 +24,7 @@ async function boot() {
   const frame = $("#map-frame");
   const toolbar = $(".map-toolbar");
   const controls = $(".map-controls");
+  const axesPanel = $("#axes-panel");
 
   let selected = -1;
   const select = (idx: number, fly = true) => {
@@ -46,6 +50,8 @@ async function boot() {
     onClick: (idx) => select(idx),
     onFrame: () => {
       const avoid: Rect[] = [rectIn(toolbar, frame), rectIn(controls, frame)];
+      if (!axesPanel.hidden) avoid.push(rectIn(axesPanel, frame));
+      labels.tags = layouts.tags();
       const cardRect = card.update();
       if (cardRect) avoid.push(cardRect);
       labels.avoid = avoid;
@@ -54,6 +60,30 @@ async function boot() {
     onScrollPast: () => nudgeHint(),
   });
   const labels = new Labels($("#labels"), catalog, galaxy);
+  const layouts = new Layouts(
+    galaxy,
+    catalog,
+    JSON.parse($("#axes-data").textContent || "[]") as AxisName[],
+    document.body.dataset.dimensionsUrl!,
+    $<HTMLButtonElement>("#axes-button"),
+    axesPanel,
+  );
+  const taste = new TasteView($("#taste"), catalog, {
+    onProfile: (profile) => {
+      galaxy.setRated(profile ? profile.ratings.map(([film]) => film) : null);
+      layouts.setPerson(profile?.position ?? null, profile ? byAxis(profile.axes) : null);
+    },
+    onPick: (idx) => {
+      showMap();
+      select(idx);
+    },
+    onShowMe: () => {
+      showMap();
+      select(-1);
+      const you = galaxy.personPosition;
+      if (you) galaxy.flyToPoint(you);
+    },
+  });
   const card = new Card(
     $("#card"),
     catalog,
@@ -131,7 +161,7 @@ async function boot() {
   const hashMovie = () => {
     const raw = new URLSearchParams(location.hash.slice(1)).get("m");
     const idx = raw === null ? NaN : Number(raw);
-    return Number.isInteger(idx) && catalog.movies[idx] ? idx : -1;
+    return Number.isInteger(idx) && catalog.movies[idx]?.shown ? idx : -1;
   };
   window.addEventListener("hashchange", () => {
     const idx = hashMovie();
@@ -143,6 +173,15 @@ async function boot() {
     showMap();
     select(fromHash);
   }
+  // Back from Google sign-in (or a return visit): finish a pending save or show the saved map.
+  if (await taste.restore() && location.hash === "#taste") $("#taste").scrollIntoView({ block: "start" });
+}
+
+/** Taste-axis values in axis order (the API lists strongest leanings first). */
+function byAxis(axes: TasteAxis[]): number[] {
+  const values: number[] = [];
+  for (const a of axes) values[a.axis] = a.value;
+  return values;
 }
 
 function showMap() {
@@ -255,7 +294,7 @@ function buildGenrePicker(
 }
 
 function fillNumbers(catalog: Catalog) {
-  const n = catalog.movies.length;
+  const n = catalog.movies.filter((m) => m.shown).length;
   const films = n.toLocaleString();
   const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 0 });
   const ratings = catalog.meta.n_ratings ?? catalog.movies.reduce((sum, m) => sum + m.n, 0);

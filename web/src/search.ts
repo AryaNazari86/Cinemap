@@ -40,6 +40,7 @@ export class Search {
   private match(q: string): number[] {
     const scored: [number, number][] = [];
     for (const m of this.catalog.movies) {
+      if (!m.shown) continue;
       const key = m.searchKey;
       let s = 0;
       if (key.startsWith(q)) s = 3;

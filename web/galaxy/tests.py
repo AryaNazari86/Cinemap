@@ -512,9 +512,13 @@ class SavedProfileApiTests(TestCase):
     def test_requires_sign_in_and_csrf(self):
         anonymous = Client()
         for method in ("get", "post", "patch", "delete"):
-            res = getattr(anonymous, method)("/api/profile/")
+            with override_settings(GOOGLE_SIGN_IN=True):
+                res = getattr(anonymous, method)("/api/profile/")
             self.assertEqual(res.status_code, 401)
             self.assertEqual(res.json()["login_url"], "/accounts/google/login/")
+        # Without Google credentials there is nowhere to send people to sign in.
+        with override_settings(GOOGLE_SIGN_IN=False):
+            self.assertIsNone(anonymous.get("/api/profile/").json()["login_url"])
         strict = Client(enforce_csrf_checks=True)
         strict.force_login(self.user)
         self.assertEqual(self.save(self.preview(), client=strict).status_code, 403)

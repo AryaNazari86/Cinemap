@@ -21,6 +21,8 @@ export interface MapData {
     n_users?: number; // people behind the ratings; missing in older exports
     n_ratings?: number; // training ratings
     dim: number;
+    model_version?: string;
+    tiers?: { map: number; recommend: number }; // training ratings a film needs to be drawn / recommended
   };
   genres: string[];
   movies: RawMovie[];
@@ -29,6 +31,8 @@ export interface MapData {
 export interface Movie extends RawMovie {
   idx: number;
   searchKey: string;
+  /** Rated often enough to draw on the map; rarer films have unreliable positions and stay hidden. */
+  shown: boolean;
 }
 
 export interface Catalog {
@@ -79,7 +83,8 @@ export async function loadCatalog(url: string): Promise<Catalog> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Could not load ${url} (${res.status})`);
   const data: MapData = await res.json();
-  const movies = data.movies.map((m, idx) => ({ ...m, idx, searchKey: normalize(m.t) }));
+  const minShown = data.meta.tiers?.map ?? 0;
+  const movies = data.movies.map((m, idx) => ({ ...m, idx, searchKey: normalize(m.t), shown: m.n >= minShown }));
   const byPopularity = movies.map((m) => m.idx).sort((a, b) => movies[b].n - movies[a].n);
   return { meta: data.meta, genres: data.genres, movies, byPopularity };
 }

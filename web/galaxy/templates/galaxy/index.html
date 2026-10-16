@@ -14,13 +14,22 @@
     data-movies-url="{% static 'galaxy/data/movies.json' %}"
     data-art-url="{% url 'galaxy:art' %}"
     data-compare-url="{% url 'galaxy:compare' %}"
+    data-dimensions-url="{% static 'galaxy/data/dimensions.json' %}"
+    data-preview-url="{% url 'galaxy:profile-preview' %}"
+    data-profile-url="{% url 'galaxy:profile' %}"
+    data-sign-in="{% if sign_in %}1{% endif %}"
+    data-signed-in="{% if sign_in and user.is_authenticated %}1{% endif %}"
+    data-login-url="{% url 'google_login' %}"
+    data-logout-url="{% url 'account_logout' %}"
   >
+    {{ axes|json_script:"axes-data" }}
     <canvas id="grid-bg" class="grid-bg" aria-hidden="true"></canvas>
     <a class="skip-link" href="#map">Skip to the map</a>
 
     <nav class="localnav" aria-label="Cinemap">
       <a class="localnav-title" href="#top">Cinemap</a>
       <div class="localnav-actions">
+        <a class="pill pill-outline" href="#taste">Your taste</a>
         <a class="pill pill-outline" href="#compare">Compare</a>
         <a class="pill pill-outline" href="#how">How it works</a>
         <a class="pill pill-filled" href="#map" data-focus-search>Find a film</a>
@@ -76,6 +85,17 @@
                 <p class="genre-panel-note">Colour shows each film's most distinctive genre.</p>
               </div>
             </div>
+
+            <button id="axes-button" class="glass-button" aria-pressed="false" aria-controls="axes-panel">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V5M5 19h14M5 19l9-9" /></svg>
+              <span>Taste axes</span>
+            </button>
+          </div>
+
+          <div id="axes-panel" class="axes-panel" role="group" aria-labelledby="axes-panel-title" hidden>
+            <p id="axes-panel-title" class="axes-panel-title">Arrange films by taste</p>
+            <div class="axes-selects"></div>
+            <p class="axes-panel-note">Each axis is a direction films differ along most, named by the films at its ends.</p>
           </div>
 
           <section id="card" class="card" role="dialog" aria-modal="false" hidden></section>
@@ -102,6 +122,40 @@
             <span class="spinner" aria-hidden="true"></span>
             <span id="loader-text">Loading films…</span>
           </div>
+        </div>
+      </section>
+
+      <section id="taste" class="section section-white taste" aria-labelledby="taste-title">
+        <div class="section-inner section-narrow">
+          <p class="eyebrow">Your taste</p>
+          <h2 id="taste-title" class="section-title">Find yourself on the map.</h2>
+          <p class="lede">
+            Bring your Letterboxd ratings. Cinemap places you among the films, shows <strong>where your taste leans</strong>,
+            and picks films you'll likely love.
+          </p>
+        </div>
+        <div class="taste-body">
+          <div id="taste-upload" class="upload">
+            <ol class="upload-steps">
+              <li>
+                On the Letterboxd website, open
+                <a href="https://letterboxd.com/settings/data/" target="_blank" rel="noopener noreferrer">Settings → Data</a>
+                and choose <strong>Export your data</strong>.
+              </li>
+              <li>Drop the .zip it downloads below. Only your star ratings are sent; the rest of the export stays on your device.</li>
+            </ol>
+            <div id="dropzone" class="dropzone">
+              <svg class="dropzone-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" /></svg>
+              <p class="dropzone-title">Drop your Letterboxd export here</p>
+              <p class="dropzone-sub">The .zip, or the ratings.csv inside it</p>
+              <label class="pill pill-filled dropzone-button">
+                <input id="taste-file" class="visually-hidden" type="file" accept=".zip,.csv,application/zip,text/csv" />
+                Choose file
+              </label>
+            </div>
+          </div>
+          <p id="taste-status" class="upload-status" role="status" aria-live="polite"></p>
+          <div id="taste-result" class="taste-result" hidden></div>
         </div>
       </section>
 

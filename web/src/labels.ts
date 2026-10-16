@@ -9,6 +9,14 @@ const GAP = 6;
 
 export type Rect = [number, number, number, number];
 
+/** A label that isn't a film: "You", or the name at an end of an axis. */
+export interface Tag {
+  text: string;
+  x: number;
+  y: number;
+  kind: "you" | "axis";
+}
+
 /**
  * Floating titles beside the most prominent nearby dots. Priority goes to the hovered
  * movie, then the selected movie's neighbours, then the most rated movies;
@@ -17,12 +25,15 @@ export type Rect = [number, number, number, number];
 export class Labels {
   private readonly pool: HTMLDivElement[] = [];
   private readonly shown = new Map<number, HTMLDivElement>();
+  private readonly tagEls: HTMLDivElement[] = [];
   hovered = -1;
   selected = -1;
   /** Films whose titles always show, e.g. the two being compared. */
   pinned: number[] = [];
   /** Screen areas labels must stay out of: the open film card, the toolbar, the controls. */
   avoid: Rect[] = [];
+  /** Non-film labels, placed before any film's and always shown. */
+  tags: Tag[] = [];
 
   constructor(
     private readonly layer: HTMLElement,
@@ -35,6 +46,17 @@ export class Labels {
     const movies = this.catalog.movies;
     const placed: Rect[] = [...this.avoid];
     const next = new Map<number, { x: number; y: number; kind: string; alpha: number }>();
+
+    this.tags.forEach((tag, k) => {
+      const el = (this.tagEls[k] ??= this.create());
+      el.textContent = tag.text;
+      el.className = `star-label tag-${tag.kind}`;
+      el.style.opacity = "1";
+      el.style.transform = `translate3d(${Math.round(tag.x)}px, ${Math.round(tag.y - LABEL_HEIGHT / 2)}px, 0)`;
+      const w = tag.text.length * CHAR_WIDTH + 16;
+      placed.push([tag.x - GAP, tag.y - LABEL_HEIGHT / 2 - GAP, tag.x + w + GAP, tag.y + LABEL_HEIGHT / 2 + GAP]);
+    });
+    for (const el of this.tagEls.slice(this.tags.length)) el.style.opacity = "0";
 
     const tryPlace = (i: number, kind: string, force = false) => {
       if (next.has(i) || i === this.selected || !g.onScreen[i] || g.isFiltered(i)) return;

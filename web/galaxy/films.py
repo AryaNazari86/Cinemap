@@ -70,9 +70,15 @@ def model() -> Model:
 
 
 @cache
+def axis_names() -> list[dict]:
+    """name, low and high end, and share of the variance, per taste axis (axes.json, edited by hand)."""
+    return [{k: a[k] for k in ("name", "low", "high", "variance")} for a in json.loads(AXES.read_text())["axes"]]
+
+
+@cache
 def axes() -> Axes:
     d = _data()
-    names = [{k: a[k] for k in ("name", "low", "high")} for a in json.loads(AXES.read_text())["axes"]]
+    names = [{k: a[k] for k in ("name", "low", "high")} for a in axis_names()]
     return Axes(d["axis_mean"], d["axis_components"], d["axis_scale"], d["axis_user_quantiles"], names)
 
 

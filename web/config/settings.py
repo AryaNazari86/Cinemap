@@ -137,14 +137,13 @@ SOCIALACCOUNT_STORE_TOKENS = False
 LOGIN_REDIRECT_URL = "/#taste"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
 # From Google Cloud Console > APIs & Services > Credentials (an OAuth client of type "Web application").
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+# Sign-in (and so saving profiles) is offered only once both are set; previews work either way.
+GOOGLE_SIGN_IN = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
-        "APPS": [
-            {
-                "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
-                "secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
-            }
-        ],
+        "APPS": [{"client_id": GOOGLE_CLIENT_ID, "secret": GOOGLE_CLIENT_SECRET}],
         "SCOPE": ["email"],  # the least Google offers; no name, photo or contacts
         "AUTH_PARAMS": {"prompt": "select_account"},
         "OAUTH_PKCE_ENABLED": True,
