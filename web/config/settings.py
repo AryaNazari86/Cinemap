@@ -36,8 +36,10 @@ if not SECRET_KEY:
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "0" if ON_VERCEL else "1") == "1"
 
-# Custom domains, comma-separated, e.g. "cinemap.com,www.cinemap.com".
-CUSTOM_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
+# The site's own domain (cinemap.site redirects to www on Vercel), plus any extra domains
+# given comma-separated in DJANGO_ALLOWED_HOSTS, e.g. "preview.example.com".
+SITE_HOSTS = ["cinemap.site", "www.cinemap.site"]
+CUSTOM_HOSTS = SITE_HOSTS + [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", ".vercel.app", *CUSTOM_HOSTS]
 CSRF_TRUSTED_ORIGINS = ["https://*.vercel.app", *(f"https://{h}" for h in CUSTOM_HOSTS)]
 
