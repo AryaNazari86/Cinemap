@@ -136,22 +136,13 @@ export class Compare {
   }
 
   private render(c: Comparison) {
-    const ma = this.catalog.movies[c.a];
-    const mb = this.catalog.movies[c.b];
     const pct = Math.max(0, Math.round(c.similarity * 100));
-    const others = (this.catalog.movies.length - 2).toLocaleString();
-    const detail =
-      c.rank_b_for_a === 1
-        ? `${mb.t} is the single closest film to ${ma.t}.`
-        : `${mb.t} is closer to ${ma.t} than ${formatShare(c.closer_than)} of the other ${others} films.`;
-
     const show = text("button", "pill pill-filled", "See both on the map");
     show.addEventListener("click", () => this.onShowPair(c.a, c.b));
     this.result.replaceChildren(
       text("p", "compare-score", `${pct}%`),
       text("p", "compare-score-label", "match"),
       text("p", "compare-verdict", verdict(c.closer_than)),
-      text("p", "compare-detail", detail),
       show,
     );
 
@@ -189,11 +180,6 @@ export function tile(catalog: Catalog, idx: number, onPick: () => void): HTMLLIE
       poster.prepend(img);
     });
   return li;
-}
-
-function formatShare(share: number): string {
-  const pct = Math.min(share * 100, 99.9);
-  return `${pct >= 99 ? pct.toFixed(1) : Math.round(pct)}%`;
 }
 
 function text<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, content: string) {

@@ -14,7 +14,6 @@
     data-movies-url="{% static 'galaxy/data/movies.json' %}"
     data-art-url="{% url 'galaxy:art' %}"
     data-compare-url="{% url 'galaxy:compare' %}"
-    data-dimensions-url="{% static 'galaxy/data/dimensions.json' %}"
     data-preview-url="{% url 'galaxy:profile-preview' %}"
     data-profile-url="{% url 'galaxy:profile' %}"
     data-sign-in="{% if sign_in %}1{% endif %}"
@@ -22,28 +21,27 @@
     data-login-url="{% url 'google_login' %}"
     data-logout-url="{% url 'account_logout' %}"
   >
-    {{ axes|json_script:"axes-data" }}
     <canvas id="grid-bg" class="grid-bg" aria-hidden="true"></canvas>
     <a class="skip-link" href="#map">Skip to the map</a>
 
     <nav class="localnav" aria-label="Cinemap">
       <a class="localnav-title" href="#top">Cinemap</a>
       <div class="localnav-actions">
-        <a class="pill pill-outline" href="#taste">Your taste</a>
         <a class="pill pill-outline" href="#compare">Compare</a>
         <a class="pill pill-outline" href="#how">How it works</a>
         <a class="pill pill-filled" href="#map" data-focus-search>Find a film</a>
       </div>
     </nav>
 
+    <a id="taste-fab" class="fab" href="#taste">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="8" /></svg>
+      See your taste
+    </a>
+
     <main id="top">
       <header class="hero">
         <p class="eyebrow">Cinemap</p>
         <h1 class="hero-title">Every film.<br />Mapped by taste.</h1>
-        <p class="hero-sub">
-          <span id="hero-films">23,350</span> films, placed by how people actually rated them. Find one you love, then
-          see what sits beside it.
-        </p>
       </header>
 
       <section id="map" class="map-section" aria-label="Film map">
@@ -85,17 +83,6 @@
                 <p class="genre-panel-note">Colour shows each film's most distinctive genre.</p>
               </div>
             </div>
-
-            <button id="axes-button" class="glass-button" aria-pressed="false" aria-controls="axes-panel">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V5M5 19h14M5 19l9-9" /></svg>
-              <span>Taste axes</span>
-            </button>
-          </div>
-
-          <div id="axes-panel" class="axes-panel" role="group" aria-labelledby="axes-panel-title" hidden>
-            <p id="axes-panel-title" class="axes-panel-title">Arrange films by taste</p>
-            <div class="axes-selects"></div>
-            <p class="axes-panel-note">Each axis is a direction films differ along most, named by the films at its ends.</p>
           </div>
 
           <section id="card" class="card" role="dialog" aria-modal="false" hidden></section>
@@ -125,13 +112,24 @@
         </div>
       </section>
 
+      <section class="section section-dark carousel-section" data-grid-accent="245, 197, 24" aria-labelledby="classics-title">
+        <div class="section-inner section-head">
+          <h2 id="classics-title" class="section-title section-title-left">Start with a favourite.</h2>
+          <button id="carousel-toggle" class="round-button" aria-pressed="false" aria-label="Pause the carousel">
+            <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12" /></svg>
+            <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
+          </button>
+        </div>
+        <div id="classics" class="classics" aria-label="Popular films"></div>
+      </section>
+
       <section id="taste" class="section section-white taste" aria-labelledby="taste-title">
         <div class="section-inner section-narrow">
           <p class="eyebrow">Your taste</p>
           <h2 id="taste-title" class="section-title">Find yourself on the map.</h2>
           <p class="lede">
-            Bring your Letterboxd ratings. Cinemap places you among the films, shows <strong>where your taste leans</strong>,
-            and picks films you'll likely love.
+            Bring your Letterboxd ratings. Cinemap <strong>puts you on the map</strong>, among the films your taste
+            points to, and picks films you'll likely love.
           </p>
         </div>
         <div class="taste-body">
@@ -159,22 +157,10 @@
         </div>
       </section>
 
-      <section class="section section-dark carousel-section" data-grid-accent="245, 197, 24" aria-labelledby="classics-title">
-        <div class="section-inner section-head">
-          <h2 id="classics-title" class="section-title section-title-left">Start with a favourite.</h2>
-          <button id="carousel-toggle" class="round-button" aria-pressed="false" aria-label="Pause the carousel">
-            <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12" /></svg>
-            <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
-          </button>
-        </div>
-        <div id="classics" class="classics" aria-label="Popular films"></div>
-      </section>
-
       <section id="compare" class="section" aria-labelledby="compare-title">
         <div class="section-inner section-narrow">
           <p class="eyebrow">Compare</p>
           <h2 id="compare-title" class="section-title">How alike are two films?</h2>
-          <p class="lede">Pick any two. The score compares <strong>who loves them</strong>, not what they're about.</p>
         </div>
         <div class="compare">
           <div class="compare-film" data-slot="a"></div>

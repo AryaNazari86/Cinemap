@@ -1,11 +1,10 @@
+import * as THREE from "three";
 import "./style.css";
 import { artFor } from "./art";
 import { COMPACT_QUERY, Card } from "./card";
 import { Carousel } from "./carousel";
 import { Compare, tile } from "./compare";
-import type { TasteAxis } from "./api";
 import { type Catalog, genreColor, loadCatalog } from "./data";
-import { type AxisName, Layouts } from "./dimensions";
 import { Galaxy } from "./galaxy";
 import { KineticGrid } from "./kinetic-grid";
 import { Labels, type Rect } from "./labels";
@@ -24,7 +23,6 @@ async function boot() {
   const frame = $("#map-frame");
   const toolbar = $(".map-toolbar");
   const controls = $(".map-controls");
-  const axesPanel = $("#axes-panel");
 
   let selected = -1;
   const select = (idx: number, fly = true) => {
@@ -50,8 +48,9 @@ async function boot() {
     onClick: (idx) => select(idx),
     onFrame: () => {
       const avoid: Rect[] = [rectIn(toolbar, frame), rectIn(controls, frame)];
-      if (!axesPanel.hidden) avoid.push(rectIn(axesPanel, frame));
-      labels.tags = layouts.tags();
+      // "You", just right of your dot, clear of it and most of its halo.
+      const you = galaxy.personPosition && galaxy.toScreen(galaxy.personPosition);
+      labels.tags = you ? [{ text: "You", x: you.x + 24, y: you.y, kind: "you" }] : [];
       const cardRect = card.update();
       if (cardRect) avoid.push(cardRect);
       labels.avoid = avoid;
@@ -60,18 +59,10 @@ async function boot() {
     onScrollPast: () => nudgeHint(),
   });
   const labels = new Labels($("#labels"), catalog, galaxy);
-  const layouts = new Layouts(
-    galaxy,
-    catalog,
-    JSON.parse($("#axes-data").textContent || "[]") as AxisName[],
-    document.body.dataset.dimensionsUrl!,
-    $<HTMLButtonElement>("#axes-button"),
-    axesPanel,
-  );
   const taste = new TasteView($("#taste"), catalog, {
     onProfile: (profile) => {
       galaxy.setRated(profile ? profile.ratings.map(([film]) => film) : null);
-      layouts.setPerson(profile?.position ?? null, profile ? byAxis(profile.axes) : null);
+      galaxy.setPerson(profile ? new THREE.Vector3(...profile.position) : null);
     },
     onPick: (idx) => {
       showMap();
@@ -177,12 +168,6 @@ async function boot() {
   if (await taste.restore() && location.hash === "#taste") $("#taste").scrollIntoView({ block: "start" });
 }
 
-/** Taste-axis values in axis order (the API lists strongest leanings first). */
-function byAxis(axes: TasteAxis[]): number[] {
-  const values: number[] = [];
-  for (const a of axes) values[a.axis] = a.value;
-  return values;
-}
 
 function showMap() {
   $("#map-frame").scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
@@ -311,7 +296,6 @@ function fillNumbers(catalog: Catalog) {
     if (value) el.textContent = value;
     else el.parentElement?.remove(); // e.g. an older export without the user count
   }
-  $("#hero-films").textContent = films;
   $<HTMLInputElement>("#search").placeholder = `Search ${films} films`;
 }
 
@@ -335,8 +319,32 @@ function buildCarousel(catalog: Catalog, onPick: (idx: number) => void) {
   new Carousel(track, $<HTMLButtonElement>("#carousel-toggle"));
 }
 
-// The background needs no film data, so it starts while the map loads.
+/**
+ * The floating "See your taste" button: jumps to the taste section, and steps aside while
+ * that section is on screen (it would point at itself).
+ */
+function bindTasteButton() {
+  const fab = $<HTMLAnchorElement>("#taste-fab");
+  const section = $("#taste");
+  fab.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    section.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    // Land keyboard users in the section rather than leaving focus on a button that hides.
+    section.setAttribute("tabindex", "-1");
+    section.focus({ preventScroll: true });
+  });
+  new IntersectionObserver(
+    ([entry]) => {
+      fab.classList.toggle("away", entry.isIntersecting);
+      fab.inert = entry.isIntersecting;
+    },
+    { rootMargin: "-30% 0px -30% 0px" }, // "on screen" = reaching the middle of the window
+  ).observe(section);
+}
+
+// The background and the taste button need no film data, so they start while the map loads.
 new KineticGrid($<HTMLCanvasElement>("#grid-bg"));
+bindTasteButton();
 
 boot().catch((err) => {
   console.error(err);

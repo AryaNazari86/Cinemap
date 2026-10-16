@@ -6,9 +6,8 @@ const HOME_CAMERA = new THREE.Vector3(0, 38, 235);
 const FOCUS_DISTANCE = 42;
 const NEIGHBOR_LINES = 8;
 const CLICK_SLOP_PX = 5;
-const ACCENT = "#0071e3";
-const MORPH_MS = 1200;
-const GUIDE_COLOR = "#8e8e93";
+const ACCENT = "#f5c518"; // IMDb yellow ring
+const LINE = "#b8900a"; // deeper gold so links stay visible on the light map
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -58,7 +57,7 @@ const fragmentShader = /* glsl */ `
 `;
 
 // Rings around chosen films (the ones a person rated): a hairline circle just outside each
-// dot, sized like the dot itself so it follows zoom and the dot's state.
+// dot, sized like the dot itself so it follows zoom, filters and the dot's state.
 const ringVertexShader = /* glsl */ `
   uniform float uScale;
   uniform float uPixelRatio;
@@ -95,14 +94,6 @@ const ringFragmentShader = /* glsl */ `
 
 const YOU_SIZE = 0.085; // of the view's height
 const HALO_PERIOD_MS = 2200;
-
-/** Films gliding from one layout to another. */
-interface Morph {
-  from: Float32Array;
-  to: Float32Array;
-  start: number;
-  duration: number;
-}
 
 interface Flight {
   fromCam: THREE.Vector3;
@@ -151,7 +142,6 @@ export class Galaxy {
   /** Rings around the films a person rated; draws only the indexed films. */
   private readonly ratedGeometry = new THREE.BufferGeometry();
   private readonly rated: THREE.Points;
-  private readonly guides: THREE.LineSegments;
   private readonly viewProj = new THREE.Matrix4();
 
   private selected = -1;
@@ -159,7 +149,6 @@ export class Galaxy {
   private pair: [number, number] | null = null;
   private hovered = -1;
   private genreFilter: Set<number> | null = null;
-  private morph: Morph | null = null;
   private flight: Flight | null = null;
   private pointerDown: { x: number; y: number } | null = null;
   private pointer: { x: number; y: number } | null = null;
@@ -240,7 +229,7 @@ export class Galaxy {
     this.lines = new THREE.LineSegments(
       lineGeometry,
       // Yellow lines vanish on the light map (1.6:1), so these are near-black.
-      new THREE.LineBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.55, depthWrite: false }),
+      new THREE.LineBasicMaterial({ color: LINE, transparent: true, opacity: 0.7, depthWrite: false }),
     );
     this.lines.visible = false;
     this.scene.add(this.lines);
@@ -289,7 +278,7 @@ export class Galaxy {
     this.halo.visible = false;
     this.scene.add(this.halo);
 
-    // Shares the dots' attributes, so the rings move, hide and grow with their films.
+    // Shares the dots' attributes, so the rings hide and grow with their films.
     for (const name of ["position", "aSize", "aBoost", "aBright"]) {
       this.ratedGeometry.setAttribute(name, this.geometry.getAttribute(name));
     }
@@ -310,16 +299,6 @@ export class Galaxy {
     this.rated.frustumCulled = false;
     this.rated.visible = false;
     this.scene.add(this.rated);
-
-    // Three axes through the origin, shown in the Dimensions layout.
-    const guideGeometry = new THREE.BufferGeometry();
-    guideGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(18), 3));
-    this.guides = new THREE.LineSegments(
-      guideGeometry,
-      new THREE.LineBasicMaterial({ color: GUIDE_COLOR, transparent: true, opacity: 0.5, depthWrite: false }),
-    );
-    this.guides.visible = false;
-    this.scene.add(this.guides);
 
     this.bindPointer();
     this.bindWheel();
@@ -409,28 +388,6 @@ export class Galaxy {
     return this.you.visible ? this.you.position : null;
   }
 
-  /** Glide every film to a new layout (x, y, z per film), e.g. the taste axes. */
-  setLayout(next: Float32Array) {
-    this.morph = { from: this.positions.slice(), to: next, start: performance.now(), duration: reducedMotion ? 1 : MORPH_MS };
-    // Head for where the selection will be, not where it is; with none, take in the whole new layout.
-    if (this.selected >= 0) this.flyTo(this.selected, next);
-    else this.resetView();
-  }
-
-  /** Axis lines from -length to +length along x, y and z; null hides them. */
-  setGuides(length: number | null) {
-    this.guides.visible = length !== null;
-    if (length === null) return;
-    const attr = this.guides.geometry.getAttribute("position") as THREE.BufferAttribute;
-    for (let axis = 0; axis < 3; axis++) {
-      const end = [0, 0, 0];
-      end[axis] = length;
-      attr.setXYZ(axis * 2, -end[0], -end[1], -end[2]);
-      attr.setXYZ(axis * 2 + 1, end[0], end[1], end[2]);
-    }
-    attr.needsUpdate = true;
-  }
-
   /** A 3D point in screen px within the map, or null when it's behind the camera. */
   toScreen(point: THREE.Vector3): { x: number; y: number } | null {
     const v = point.clone().project(this.camera);
@@ -445,13 +402,13 @@ export class Galaxy {
     this.flyCamera(point.clone().addScaledVector(dir, distance), point.clone(), 900 + Math.min(travel, 250) * 4, travel * 0.35);
   }
 
-  flyTo(idx: number, layout = this.positions) {
+  flyTo(idx: number) {
     const movie = this.catalog.movies[idx];
-    const target = this.pos(idx, layout);
+    const target = this.pos(idx);
     // Back off far enough that most of the neighbour constellation is in frame.
     const spread = movie.nb
       .slice(0, NEIGHBOR_LINES)
-      .map((j) => target.distanceTo(this.pos(j, layout)))
+      .map((j) => target.distanceTo(this.pos(j)))
       .sort((a, b) => a - b);
     const reach = spread[Math.floor(spread.length * 0.75)] ?? 0;
     const distance = THREE.MathUtils.clamp(reach * 1.7, FOCUS_DISTANCE, 110);
@@ -491,12 +448,12 @@ export class Galaxy {
     return Math.min(Math.max(px, 2), 20);
   }
 
-  /** A film's position in a layout (the current one by default). */
-  private pos(i: number, layout = this.positions): THREE.Vector3 {
-    return new THREE.Vector3(layout[i * 3], layout[i * 3 + 1], layout[i * 3 + 2]);
+  private pos(i: number): THREE.Vector3 {
+    const p = this.positions;
+    return new THREE.Vector3(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
   }
 
-  /** Put the neighbour lines and rings on their films; rerun while films move. */
+  /** Put the neighbour lines and rings on their films. */
   private placeMarks() {
     const lineAttr = this.lines.geometry.getAttribute("position") as THREE.BufferAttribute;
     if (this.pair) {
@@ -569,17 +526,6 @@ export class Galaxy {
         this.camera.position.addScaledVector(away, Math.sin(Math.PI * e) * f.arc);
       }
       if (p >= 1) this.flight = null;
-    }
-
-    if (this.morph) {
-      const m = this.morph;
-      const p = Math.min((now - m.start) / m.duration, 1);
-      const e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-      for (let i = 0; i < this.positions.length; i++) this.positions[i] = m.from[i] + (m.to[i] - m.from[i]) * e;
-      this.geometry.getAttribute("position").needsUpdate = true;
-      this.geometry.computeBoundingSphere();
-      this.placeMarks();
-      if (p >= 1) this.morph = null;
     }
 
     if (this.halo.visible) {
@@ -737,9 +683,9 @@ function makeRingTexture(): THREE.Texture {
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d")!;
   const c = size / 2;
-  // A white halo under the blue ring separates it from the dots beneath.
+  // A near-black outline under the yellow ring keeps it visible on the light map.
   ctx.lineWidth = 12;
-  ctx.strokeStyle = "#ffffff";
+  ctx.strokeStyle = "#1d1d1f";
   ctx.beginPath();
   ctx.arc(c, c, c * 0.7, 0, Math.PI * 2);
   ctx.stroke();
@@ -784,8 +730,8 @@ function makeHaloTexture(): THREE.Texture {
   const ctx = canvas.getContext("2d")!;
   const c = size / 2;
   const glow = ctx.createRadialGradient(c, c, c * 0.35, c, c, c);
-  glow.addColorStop(0, "rgba(0, 113, 227, 0.55)");
-  glow.addColorStop(1, "rgba(0, 113, 227, 0)");
+  glow.addColorStop(0, "rgba(245, 197, 24, 0.6)");
+  glow.addColorStop(1, "rgba(245, 197, 24, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, size, size);
   const texture = new THREE.CanvasTexture(canvas);

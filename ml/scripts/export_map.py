@@ -3,18 +3,14 @@
 This is the only hand-off between ml/ and web/. It reads a model from ml/models and writes:
 
 - web/galaxy/static/galaxy/data/movies.json: the map the browser draws.
-- web/galaxy/static/galaxy/data/dimensions.json: every film's position on the taste axes,
-  loaded by the browser only when someone switches the map to those axes.
 - web/galaxy/data/films.npz: what Django needs to compare films, find posters and fold a new
   person into the model (see FILMS_NPZ below). Never the user table.
 - web/galaxy/data/titles.json: [year, title, *alternate titles] per film, for matching
   imported ratings. Titles are cleaned ("Usual Suspects, The" -> "The Usual Suspects") but
   not normalized; the server normalizes both sides with one function.
-- web/galaxy/data/axes.json: names for the taste axes, edited by hand. Re-exporting keeps
-  the names and refreshes the films listed at each end.
 
-Squashes the movie vectors to 3D with UMAP for the map layout, finds each movie's nearest
-neighbours in the full embedding space, and runs PCA on the vectors for the taste axes.
+Squashes the movie vectors to 3D with UMAP for the map layout and finds each movie's nearest
+neighbours in the full embedding space.
 
     python ml/scripts/export_map.py                   # 32M model (default)
     python ml/scripts/export_map.py \
@@ -53,13 +49,6 @@ MAP_RADIUS = 100.0
 TIER_HIDDEN, TIER_MAP, TIER_RECOMMEND = 0, 1, 2
 MAP_MIN_RATINGS = 50  # drawn on the map
 RECOMMEND_MIN_RATINGS = 200  # eligible as a recommendation or a "more like this" neighbour
-
-# Taste axes: principal components of the film unit vectors, fitted on recommendable films
-# (noisy vectors otherwise reshuffle the smaller axes) and named by the well-known films
-# at each end.
-N_AXES = 10
-AXIS_FILMS = 10
-AXIS_FILM_MIN_RATINGS = 1000
 
 
 def article_first(name):
@@ -117,75 +106,14 @@ def nearest_neighbors(unit, k, candidates, chunk=2048):
     return idx, sim
 
 
-def taste_axes(unit, fit):
-    """PCA of the centred unit vectors of the `fit` films: the directions taste varies along most.
-
-    Returns the mean, the components (N_AXES x dim), each axis's share of the variance, and
-    every film's coordinates in units of the fitted films' standard deviation, plus that scale.
-    """
-    mean = unit[fit].mean(axis=0)
-    _, s, vt = np.linalg.svd(unit[fit] - mean, full_matrices=False)
-    variance = (s**2 / (s**2).sum())[:N_AXES]
-    components = vt[:N_AXES].copy()
-    coords = (unit - mean) @ components.T
-    # SVD signs are arbitrary. Fix them so re-exporting the same model keeps each axis
-    # pointing the same way (and its names right): the most extreme fitted film is high.
-    fitted = coords[fit]
-    flip = np.sign(fitted[np.abs(fitted).argmax(axis=0), np.arange(N_AXES)])
-    components *= flip[:, None]
-    coords *= flip
-    scale = coords[fit].std(axis=0)
-    return mean, components, variance, coords / scale, scale
-
-
-def axis_ends(coords, n_ratings):
-    """Per axis, the well-known films with the lowest and highest coordinates, most extreme first."""
-    known = np.flatnonzero(n_ratings >= AXIS_FILM_MIN_RATINGS)
-    order = known[np.argsort(coords[known], axis=0)]  # (films, axes), lowest first
-    return order[:AXIS_FILMS].T, order[::-1][:AXIS_FILMS].T
-
-
-def write_axis_names(path, model_version, variance, low, high, label):
-    """Refresh the hand-named axes file: keep every name, update the films and shares."""
-    old = json.loads(path.read_text())["axes"] if path.exists() else []
-    axes = []
-    for k in range(N_AXES):
-        prev = old[k] if k < len(old) else {}
-        entry = {
-            "name": prev.get("name", f"Axis {k + 1}"),
-            "low": prev.get("low", ""),
-            "high": prev.get("high", ""),
-            "variance": round(float(variance[k]), 4),
-            "low_films": [label(i) for i in low[k]],
-            "high_films": [label(i) for i in high[k]],
-        }
-        # The model changed under a named axis: say so rather than silently mislabel it.
-        for end in ("low", "high"):
-            kept = set(prev.get(f"{end}_films", [])) & set(entry[f"{end}_films"])
-            if prev and len(kept) < AXIS_FILMS // 2:
-                print(f"  axis {k + 1} ({entry['name']}): its {end} end changed, check its names")
-        axes.append(entry)
-    payload = {
-        "about": (
-            "Names for the taste axes (principal components of the film vectors). Edit name, "
-            "low and high; export_map.py keeps them and refreshes the films and variance."
-        ),
-        "model_version": model_version,
-        "axes": axes,
-    }
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="ml/models/mf_32m.pt")
     parser.add_argument("--processed", default="ml/data/processed/ml-32m")
     parser.add_argument("--raw", default="ml/data/raw/ml-32m")
     parser.add_argument("--out", default="web/galaxy/static/galaxy/data/movies.json")
-    parser.add_argument("--dimensions-out", default="web/galaxy/static/galaxy/data/dimensions.json")
     parser.add_argument("--films-out", default="web/galaxy/data/films.npz")
     parser.add_argument("--titles-out", default="web/galaxy/data/titles.json")
-    parser.add_argument("--axes-out", default="web/galaxy/data/axes.json")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -255,18 +183,6 @@ def main():
     xyz = layout_3d(vectors, args.seed)
     print(f"nearest neighbours (k={N_NEIGHBORS}, cosine, among {reliable.sum():,} films)")
     nb_idx, nb_sim = nearest_neighbors(unit, N_NEIGHBORS, np.flatnonzero(reliable))
-    print(f"taste axes: PCA of {reliable.sum():,} films, top {N_AXES}")
-    axis_mean, axis_components, axis_variance, axis_coords, axis_scale = taste_axes(
-        unit, reliable
-    )
-    axis_low, axis_high = axis_ends(axis_coords, n_ratings)
-    # Where MovieLens raters sit on each axis (percentiles only, never the users themselves),
-    # so a new person's position can be described as "more X than 80% of people".
-    users = state["user_vectors.weight"].numpy().astype(np.float32)
-    users /= np.linalg.norm(users, axis=1, keepdims=True).clip(min=1e-8)
-    user_coords = ((users - axis_mean) @ axis_components.T) / axis_scale
-    user_quantiles = np.percentile(user_coords, np.arange(101), axis=0).T
-    del users, user_coords
 
     records = []
     for i, row in movies.iterrows():
@@ -311,17 +227,6 @@ def main():
     out.write_text(json.dumps(payload, separators=(",", ":"), ensure_ascii=False))
     print(f"wrote {out.relative_to(ROOT)} ({out.stat().st_size / 1e6:.1f} MB)")
 
-    # Axis coordinates in hundredths of a standard deviation, film by film:
-    # coords[film * axes + axis].
-    dims_out = ROOT / args.dimensions_out
-    dims_payload = {
-        "model_version": model_version,
-        "axes": N_AXES,
-        "coords": np.round(axis_coords * 100).astype(int).ravel().tolist(),
-    }
-    dims_out.write_text(json.dumps(dims_payload, separators=(",", ":")))
-    print(f"wrote {dims_out.relative_to(ROOT)} ({dims_out.stat().st_size / 1e6:.1f} MB)")
-
     # FILMS_NPZ: one row per map film index. Unit vectors are float16: a dot product is the
     # cosine the site reports as "match", and float16 halves the file while moving similarities
     # by well under 0.1 percentage points. The raw vector the model uses is unit * norm.
@@ -342,15 +247,6 @@ def main():
         # -1 where MovieLens has no link; IMDb ids without the "tt" prefix.
         tmdb=movies["tmdbId"].fillna(-1).to_numpy(np.int64),
         imdb=movies["imdbId"].astype("Float64").fillna(-1).to_numpy(np.int64),
-        # Taste axes: coords = ((unit - axis_mean) @ axis_components.T) / axis_scale.
-        axis_mean=axis_mean.astype(np.float32),
-        axis_components=axis_components.astype(np.float32),
-        axis_scale=axis_scale.astype(np.float32),
-        axis_variance=axis_variance.astype(np.float32),
-        axis_coords=axis_coords.astype(np.float16),
-        axis_low_films=axis_low.astype(np.int32),
-        axis_high_films=axis_high.astype(np.int32),
-        axis_user_quantiles=user_quantiles.astype(np.float32),
     )
     print(f"wrote {films_out.relative_to(ROOT)} ({films_out.stat().st_size / 1e6:.1f} MB)")
 
@@ -363,14 +259,6 @@ def main():
         json.dumps({"films": titles}, separators=(",", ":"), ensure_ascii=False)
     )
     print(f"wrote {titles_out.relative_to(ROOT)} ({titles_out.stat().st_size / 1e6:.1f} MB)")
-
-    def label(i):
-        year = movies["year"][i]
-        return movies["name"][i] if pd.isna(year) else f"{movies['name'][i]} ({year})"
-
-    axes_out = ROOT / args.axes_out
-    write_axis_names(axes_out, model_version, axis_variance, axis_low, axis_high, label)
-    print(f"wrote {axes_out.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

@@ -13,10 +13,14 @@ export class Carousel {
   private last = 0;
   private resumeTimer = 0;
   private pos: number | null = null; // sub-pixel position while drifting, since scrollLeft rounds
+  private stopped = false;
+  private readonly visibility: IntersectionObserver;
 
   constructor(
     private readonly track: HTMLElement,
     private readonly toggle: HTMLButtonElement,
+    /** What the pause button names, e.g. "Pause the recommendations". */
+    private readonly name = "carousel",
   ) {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) this.setPaused(true);
@@ -31,12 +35,19 @@ export class Carousel {
       track.addEventListener(type, () => this.holdBriefly(), { passive: true });
     }
     track.addEventListener("scroll", () => this.wrap(), { passive: true });
-    new IntersectionObserver(([entry]) => {
+    this.visibility = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) this.holds.delete("offscreen");
       else this.holds.add("offscreen");
-    }).observe(track);
+    });
+    this.visibility.observe(track);
 
     requestAnimationFrame((t) => this.tick(t));
+  }
+
+  /** For a row that's being replaced: end the drift loop for good. */
+  stop() {
+    this.stopped = true;
+    this.visibility.disconnect();
   }
 
   /** Width of one copy of the items: where the second copy starts. */
@@ -46,6 +57,7 @@ export class Carousel {
   }
 
   private tick(now: number) {
+    if (this.stopped) return;
     const dt = this.last ? Math.min(now - this.last, 100) : 0;
     this.last = now;
     if (!this.paused && this.holds.size === 0 && this.loopWidth > 0) {
@@ -82,7 +94,7 @@ export class Carousel {
   private setPaused(paused: boolean) {
     this.paused = paused;
     this.toggle.setAttribute("aria-pressed", String(paused));
-    this.toggle.setAttribute("aria-label", paused ? "Play the carousel" : "Pause the carousel");
+    this.toggle.setAttribute("aria-label", `${paused ? "Play" : "Pause"} the ${this.name}`);
     this.toggle.classList.toggle("paused", paused);
   }
 }

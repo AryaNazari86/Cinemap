@@ -13,7 +13,6 @@ import numpy as np
 DATA = Path(__file__).resolve().parent / "data"
 FILMS = DATA / "films.npz"
 TITLES = DATA / "titles.json"  # [year, title, *alternate titles] per film
-AXES = DATA / "axes.json"  # hand-edited names for the taste axes
 WIKIPEDIA = DATA / "wikipedia.json"  # written by scripts/link_wikipedia.py
 
 # Reliability tiers in films.npz, from each film's training rating count (thresholds live in the export).
@@ -31,17 +30,6 @@ class Model:
     bias: np.ndarray
     tier: np.ndarray
     xyz: np.ndarray  # map positions
-
-
-@dataclass(frozen=True)
-class Axes:
-    """Taste axes: coords = ((unit - mean) @ components.T) / scale, in standard deviations."""
-
-    mean: np.ndarray
-    components: np.ndarray
-    scale: np.ndarray
-    user_quantiles: np.ndarray  # (axes, 101): percentiles of MovieLens raters on each axis
-    names: list[dict]  # name, low, high per axis
 
 
 @cache
@@ -67,19 +55,6 @@ def model() -> Model:
         tier=d["tier"],
         xyz=d["xyz"],
     )
-
-
-@cache
-def axis_names() -> list[dict]:
-    """name, low and high end, and share of the variance, per taste axis (axes.json, edited by hand)."""
-    return [{k: a[k] for k in ("name", "low", "high", "variance")} for a in json.loads(AXES.read_text())["axes"]]
-
-
-@cache
-def axes() -> Axes:
-    d = _data()
-    names = [{k: a[k] for k in ("name", "low", "high")} for a in axis_names()]
-    return Axes(d["axis_mean"], d["axis_components"], d["axis_scale"], d["axis_user_quantiles"], names)
 
 
 @cache

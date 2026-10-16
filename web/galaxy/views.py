@@ -15,7 +15,7 @@ MAX_FILMS = 24
 # The cookie lets the page's scripts send the CSRF token with uploads.
 @ensure_csrf_cookie
 def index(request):
-    context = {"art_source": art.source(), "axes": films.axis_names(), "sign_in": settings.GOOGLE_SIGN_IN}
+    context = {"art_source": art.source(), "sign_in": settings.GOOGLE_SIGN_IN}
     return render(request, "galaxy/index.html", context)
 
 

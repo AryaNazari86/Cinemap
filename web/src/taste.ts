@@ -1,11 +1,10 @@
 import * as api from "./api";
-import type { SavedProfile, TasteAxis, TasteProfile } from "./api";
+import type { SavedProfile, TasteProfile } from "./api";
 import { artFor } from "./art";
+import { Carousel } from "./carousel";
 import { type Catalog, genreColor } from "./data";
 import { ExportError, ratingsCsv } from "./letterboxd";
 
-const RECS_FIRST = 12;
-const LEANINGS_SHOWN = 4;
 const UNMATCHED_SHOWN = 60;
 // A preview survives the trip to Google and back in this tab only, then is saved and forgotten.
 const PENDING_SAVE = "cinemap:pending-save";
@@ -26,13 +25,14 @@ interface PendingSave {
 }
 
 /**
- * "Your taste": upload a Letterboxd export, see where you sit on the map and on the taste
- * axes, get recommendations, and (signed in) save them.
+ * "Your taste": upload a Letterboxd export, see where you sit on the map, get
+ * recommendations, and (signed in) save them.
  */
 export class TasteView {
   private profile: TasteProfile | null = null;
   private saved: SavedProfile["saved"] | null = null;
   private busy = false;
+  private recsCarousel: Carousel | null = null;
   private readonly upload: HTMLElement;
   private readonly dropzone: HTMLElement;
   private readonly input: HTMLInputElement;
@@ -141,6 +141,8 @@ export class TasteView {
   }
 
   private clear() {
+    this.recsCarousel?.stop();
+    this.recsCarousel = null;
     this.profile = null;
     this.saved = null;
     this.events.onProfile(null);
@@ -163,11 +165,11 @@ export class TasteView {
 
   private render() {
     const p = this.profile!;
+    this.recsCarousel?.stop();
     this.upload.hidden = true;
     this.result.hidden = false;
     const parts = [
       this.renderHeader(p),
-      h("div", { className: "taste-grid" }, [this.renderLeanings(p.axes), this.renderNear(p)]),
       this.renderRecommendations(p),
       this.renderUnmatched(p),
       this.renderSave(),
@@ -190,6 +192,7 @@ export class TasteView {
         document.createTextNode(` placed you, ${pct(p.match.rate)} of your ratings.`),
       ]),
       h("p", { className: `taste-confidence confidence-${p.confidence}`, textContent: confidence }),
+      h("p", { className: "taste-legend", textContent: "On the map you're the dark dot, and the films you rated are ringed." }),
       h("div", { className: "taste-actions" }, [showMe, again, this.saved ? null : hide]),
     ]);
   }
@@ -199,85 +202,34 @@ export class TasteView {
     this.input.click();
   }
 
-  private renderLeanings(axes: TasteAxis[]): HTMLElement {
-    const lean = (a: TasteAxis) => {
-      const high = a.percentile >= 50;
-      const share = high ? a.percentile : 100 - a.percentile;
-      const side = high ? a.high : a.low;
-      const sentence = `More ${side.toLowerCase()} than ${share}% of MovieLens raters`;
-      const dot = h("span", { className: "lean-dot" });
-      dot.style.left = `${Math.min(Math.max(a.percentile, 2), 98)}%`;
-      return h("li", { className: "lean" }, [
-        h("p", { className: "lean-name", textContent: a.name }),
-        h("div", { className: "lean-track", role: "img", ariaLabel: `${a.name}: ${sentence}` } as Partial<HTMLDivElement>, [
-          h("span", { className: "lean-mid", ariaHidden: "true" }),
-          dot,
-        ]),
-        h("div", { className: "lean-ends", ariaHidden: "true" }, [
-          h("span", { textContent: a.low, className: high ? "" : "strong" }),
-          h("span", { textContent: a.high, className: high ? "strong" : "" }),
-        ]),
-        h("p", { className: "lean-text", textContent: sentence }),
-      ]);
-    };
-    const more = axes.slice(LEANINGS_SHOWN);
-    return h("section", { className: "panel leanings" }, [
-      h("h3", { className: "panel-title", textContent: "Where your taste leans" }),
-      h("ul", { className: "lean-list" }, axes.slice(0, LEANINGS_SHOWN).map(lean)),
-      more.length
-        ? h("details", { className: "lean-more" }, [
-            h("summary", { textContent: `All ${axes.length} axes` }),
-            h("ul", { className: "lean-list" }, more.map(lean)),
-          ])
-        : null,
-      h("p", { className: "panel-note", textContent: "Axes are the directions films differ along most, named by the films at each end. Try them on the map with Taste axes." }),
-    ]);
-  }
-
-  private renderNear(p: TasteProfile): HTMLElement {
-    return h("section", { className: "panel near" }, [
-      h("h3", { className: "panel-title", textContent: "Films nearest your taste" }),
-      h(
-        "ol",
-        { className: "near-list" },
-        p.near.map((idx) => {
-          const m = this.catalog.movies[idx];
-          const row = h("button", { className: "similar-row", onclick: () => this.events.onPick(idx) }, [
-            h("span", { className: "swatch", ariaHidden: "true" }),
-            h("span", { className: "similar-title", textContent: m.t }),
-            h("span", { className: "similar-year", textContent: m.y ? String(m.y) : "" }),
-          ]);
-          row.style.setProperty("--c", genreColor(this.catalog.genres[m.pg]));
-          return h("li", {}, [row]);
-        }),
-      ),
-      h("p", { className: "panel-note", textContent: "You sit among these on the map; the films you rated are ringed there." }),
-    ]);
-  }
-
+  /** All recommendations, best first, as a slowly drifting row like "Start with a favourite". */
   private renderRecommendations(p: TasteProfile): HTMLElement {
-    const list = h("ul", { className: "recs" });
-    const add = (from: number, to: number) => {
-      const recs = p.recommendations.slice(from, to);
-      artFor(recs.map((r) => r.film));
-      list.append(...recs.map((r) => this.recCard(r.film, r.predicted, r.because)));
-    };
-    add(0, RECS_FIRST);
-    const more =
-      p.recommendations.length > RECS_FIRST
-        ? h("button", {
-            className: "pill pill-outline recs-more",
-            textContent: `Show ${p.recommendations.length - RECS_FIRST} more`,
-            onclick: () => {
-              add(RECS_FIRST, p.recommendations.length);
-              more!.remove();
-            },
-          })
-        : null;
+    const recs = p.recommendations;
+    artFor(recs.map((r) => r.film)); // one request per 24 posters, not one per card
+    const copy = () => h("ul", { className: "tiles" }, recs.map((r) => this.recCard(r.film, r.predicted, r.because)));
+    // The second copy only makes the loop seamless: hidden from assistive tech and Tab.
+    const clone = copy();
+    clone.dataset.clone = "";
+    clone.setAttribute("aria-hidden", "true");
+    clone.inert = true;
+    const track = h("div", { className: "classics recs-track", ariaLabel: "Films you'll likely love" } as Partial<HTMLDivElement>, [
+      copy(),
+      clone,
+    ]);
+    const toggle = h("button", { className: "round-button", ariaLabel: "Pause the recommendations" });
+    toggle.setAttribute("aria-pressed", "false");
+    toggle.innerHTML = `<svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12" /></svg>
+      <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>`;
+    // Start drifting once the row is in the page and has a width.
+    requestAnimationFrame(() => {
+      if (track.isConnected) this.recsCarousel = new Carousel(track, toggle, "recommendations");
+    });
     return h("section", { className: "recs-section" }, [
-      h("h3", { className: "taste-subtitle", textContent: "Films you'll likely love" }),
-      list,
-      more,
+      h("div", { className: "section-head recs-head" }, [
+        h("h3", { className: "taste-subtitle", textContent: "Films you'll likely love" }),
+        toggle,
+      ]),
+      track,
     ]);
   }
 
@@ -297,7 +249,6 @@ export class TasteView {
         h("span", { className: "rec-body" }, [
           h("span", { className: "tile-title", textContent: m.t }),
           h("span", { className: "tile-meta", textContent: [m.y, `★ ${predicted.toFixed(1)} for you`].filter(Boolean).join(" · ") }),
-          liked.length ? h("span", { className: "rec-because", textContent: `Because you liked ${liked.join(", ")}` }) : null,
         ]),
       ],
     );
@@ -335,11 +286,11 @@ export class TasteView {
   }
 
   private renderSave(): HTMLElement {
-    const box = h("section", { className: "panel save", ariaLabel: "Save your map" } as Partial<HTMLElement>);
+    // Without sign-in there's nothing to do here, so it's just a quiet line at the end.
     if (!api.signInEnabled) {
-      box.append(h("p", { className: "panel-note", textContent: "Your map lives in this tab only; nothing was stored. Saving to an account is coming soon." }));
-      return box;
+      return h("p", { className: "taste-footnote", textContent: "Your map lives in this tab only; nothing was stored. Saving to an account is coming soon." });
     }
+    const box = h("section", { className: "panel save", ariaLabel: "Save your map" } as Partial<HTMLElement>);
     const consent = consentBox(this.saved?.research_consent ?? false);
 
     if (this.saved) {

@@ -22,7 +22,6 @@ LOW_CONFIDENCE_BELOW = 20
 HIGH_CONFIDENCE_FROM = 100
 
 PLACE_NEIGHBORS = 15
-NEAR_SHOWN = 8
 RECOMMENDATIONS = 30
 BECAUSE_SHOWN = 3
 # "Because you liked" draws on films rated at least this, or on the person's top quarter if none are.
@@ -61,8 +60,8 @@ def confidence(n: int) -> str:
     return "high" if n >= HIGH_CONFIDENCE_FROM else "medium"
 
 
-def place(person: Person) -> tuple[list[float], list[int]]:
-    """A map position for the person, and the reliable films nearest their taste.
+def place(person: Person) -> list[float]:
+    """A map position for the person.
 
     UMAP can't place new points, so the person sits at the similarity-weighted average
     position of the films whose vectors point most their way.
@@ -74,19 +73,7 @@ def place(person: Person) -> tuple[list[float], list[int]]:
     near = _top(sims, PLACE_NEIGHBORS)
     weights = np.clip(sims[near], 1e-6, None)
     position = (model.xyz[near] * weights[:, None]).sum(axis=0) / weights.sum()
-    return [round(float(c), 2) for c in position], [int(i) for i in near[:NEAR_SHOWN]]
-
-
-def taste_axes(person: Person) -> list[dict]:
-    """Where the person sits on each named axis: in standard deviations of the films, and as a
-    percentile of MovieLens raters. Strongest leanings first."""
-    axes = films.axes()
-    coords = ((_unit(person.vector) - axes.mean) @ axes.components.T) / axes.scale
-    result = []
-    for k, (value, quantiles, names) in enumerate(zip(coords, axes.user_quantiles, axes.names)):
-        percentile = float(np.interp(value, quantiles, np.arange(101)))
-        result.append({"axis": k, **names, "value": round(float(value), 2), "percentile": round(percentile)})
-    return sorted(result, key=lambda a: -abs(a["percentile"] - 50))
+    return [round(float(c), 2) for c in position]
 
 
 def recommend(person: Person, rated: np.ndarray, ratings: np.ndarray) -> list[dict]:
@@ -120,7 +107,7 @@ def profile(matched: list[Match]) -> dict:
     rated = np.array([m.film for m in matched])
     ratings = np.array([m.rating for m in matched], dtype=np.float64)
     person = fold_in(rated, ratings)
-    position, near = place(person)
+    position = place(person)
     return {
         "person": person,
         "model_version": films.model().version,
@@ -128,8 +115,6 @@ def profile(matched: list[Match]) -> dict:
         "confidence": confidence(len(matched)),
         "bias": round(person.bias, 3),
         "position": position,
-        "near": near,
-        "axes": taste_axes(person),
         "recommendations": recommend(person, rated, ratings),
     }
 

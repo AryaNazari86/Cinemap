@@ -1,14 +1,5 @@
 // The taste-profile endpoints in galaxy/views.py. Shapes follow galaxy/profiles.py's describe().
 
-export interface TasteAxis {
-  axis: number;
-  name: string;
-  low: string;
-  high: string;
-  value: number; // standard deviations of the films along this axis
-  percentile: number; // share of MovieLens raters below this point, 0..100
-}
-
 export interface Recommendation {
   film: number;
   predicted: number;
@@ -29,8 +20,6 @@ export interface TasteProfile {
   confidence: "low" | "medium" | "high";
   bias: number;
   position: [number, number, number];
-  near: number[];
-  axes: TasteAxis[]; // strongest leanings first
   recommendations: Recommendation[];
   match: MatchSummary;
   ratings: [number, number, string | null][]; // [film, stars, date]

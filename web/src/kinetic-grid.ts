@@ -27,9 +27,9 @@ const RIPPLE_SPEED = 400; // px per second
 const RIPPLE_LIFE_S = 0.85;
 const RIPPLE_WIDTH = 55;
 
-// Light theme: faint graphite at rest, the site's accent blue (#0071e3) near the pointer.
+// Faint graphite at rest, IMDb yellow (#f5c518) near the pointer.
 // Sections can ask for another glow colour with data-grid-accent="r, g, b".
-const DEFAULT_ACCENT = "0, 113, 227";
+const DEFAULT_ACCENT = "245, 197, 24";
 const LINE_REST = [0, 0, 0, 0.055] as const;
 const NODE_REST = [0, 0, 0, 0.13] as const;
 const NODE_RADIUS = [1.6, 3] as const;
@@ -77,6 +77,8 @@ export class KineticGrid {
       this.dirty = true;
     });
     window.addEventListener("click", (ev) => {
+      // A click can land after the frame's timestamp was taken, so its ripple may start a
+      // moment "in the future"; ages are clamped at 0 so radii never go negative.
       this.ripples.push({ x: ev.clientX, y: ev.clientY, born: performance.now() });
       this.dirty = true;
     });
@@ -109,6 +111,8 @@ export class KineticGrid {
   }
 
   private tick(now: number) {
+    // Schedule first, so one bad frame can never stop the loop.
+    requestAnimationFrame((t) => this.tick(t));
     const easing = Math.abs(this.influence - this.influenceTarget) > 0.001;
     const following = Math.abs(this.pointer.x - this.target.x) + Math.abs(this.pointer.y - this.target.y) > 0.3;
     if (this.dirty || easing || following || this.ripples.length) {
@@ -119,7 +123,6 @@ export class KineticGrid {
       this.draw(now);
       this.dirty = false;
     }
-    requestAnimationFrame((t) => this.tick(t));
   }
 
   /** A grid point moved by the pointer and any passing ripples; proximity drives its colour. */
@@ -137,7 +140,7 @@ export class KineticGrid {
     let x = gx;
     let y = gy;
     for (const r of this.ripples) {
-      const age = (now - r.born) / 1000;
+      const age = Math.max(0, now - r.born) / 1000;
       const radius = age * RIPPLE_SPEED;
       const strength = Math.max(0, 1 - age / RIPPLE_LIFE_S);
       const rdx = gx - r.x;
@@ -162,6 +165,7 @@ export class KineticGrid {
 
   private draw(now: number) {
     const { ctx, width: W, height: H, accent } = this;
+    if (!W || !H) return; // zero-size window (e.g. a collapsed pane): nothing to draw yet
     const [ar, ag, ab] = accent.split(",").map(Number);
     const lineActive: Rgba = [ar, ag, ab, 0.55];
     const nodeActive: Rgba = [ar, ag, ab, 0.9];
@@ -218,7 +222,7 @@ export class KineticGrid {
     }
 
     for (const r of this.ripples) {
-      const age = (now - r.born) / 1000;
+      const age = Math.max(0, now - r.born) / 1000;
       ctx.beginPath();
       ctx.arc(r.x, r.y, age * RIPPLE_SPEED, 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(${accent},${(Math.max(0, 1 - age / RIPPLE_LIFE_S) * 0.25).toFixed(3)})`;

@@ -9,12 +9,12 @@ const GAP = 6;
 
 export type Rect = [number, number, number, number];
 
-/** A label that isn't a film: "You", or the name at an end of an axis. */
+/** A label that isn't a film, such as "You". */
 export interface Tag {
   text: string;
   x: number;
   y: number;
-  kind: "you" | "axis";
+  kind: "you";
 }
 
 /**

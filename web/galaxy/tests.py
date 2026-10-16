@@ -373,7 +373,6 @@ class ProfilePreviewApiTests(SimpleTestCase):
         self.assertEqual(data["match"]["unmatched"], [{"name": "Not A Real Film", "year": 2020}])
         self.assertEqual(data["confidence"], "low")
         self.assertEqual(len(data["position"]), 3)
-        self.assertEqual(len(data["axes"]), 10)
         self.assertEqual(len(data["ratings"]), 7)
         recs = data["recommendations"]
         self.assertEqual(len(recs), taste.RECOMMENDATIONS)
@@ -426,7 +425,7 @@ class SavedProfileApiTests(TestCase):
         self.assertEqual(res["Cache-Control"], "no-store")
         self.assertFalse(fetched["stale"])
         self.assertFalse(fetched["saved"]["research_consent"])  # off unless asked for
-        for key in ("recommendations", "axes", "position", "near", "ratings"):
+        for key in ("recommendations", "position", "ratings"):
             self.assertEqual(fetched[key], preview[key], key)
         self.assertEqual(fetched["match"]["matched"], 7)
         self.assertEqual(ProfileRating.objects.count(), 7)
